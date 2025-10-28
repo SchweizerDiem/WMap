@@ -8,7 +8,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Login 2025',
+      title: 'Login Page',
       theme: ThemeData(
         primarySwatch: Colors.blue,
       ),
@@ -158,7 +158,7 @@ class HomePage extends StatelessWidget{
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Mane Menu')),
+      appBar: AppBar(title: const Text('Main Menu')),
       body: const Center(
         child: Text(
           'Bem-Vindo',
