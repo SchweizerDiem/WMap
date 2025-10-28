@@ -118,14 +118,20 @@ class _LoginPageState extends State<LoginPage> {
                 ),
               ),
               const SizedBox(height: 10),
-              const Center(
-                child: Text(
-                  "Don't have an account? Sign Up",
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontFamily: 'Poppins',
-                    fontSize: 14,
-                    color: Color(0xFF87879D),
+              Center(
+                child: TextButton(
+                  onPressed: () => Navigator.pushNamed(context, '/register'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: const Color(0xFF87879D),
+                  ),
+                  child: const Text(
+                    "Don't have an account? Sign Up",
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontFamily: 'Poppins',
+                      fontSize: 14,
+                      color: Color(0xFF87879D),
+                    ),
                   ),
                 ),
               )

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'login.dart';
+import 'register.dart';
 
 void main() {
   runApp(const MyApp());
@@ -19,6 +20,7 @@ class MyApp extends StatelessWidget {
       // Register the home route so the login page can navigate here
       routes: {
         '/home': (context) => const HomePage(),
+        '/register': (context) => const RegisterPage(),
       },
       debugShowCheckedModeBanner: false,
     );
