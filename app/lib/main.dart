@@ -27,6 +27,25 @@ class _LoginPageState extends State<LoginPage> {
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
 
+
+//credenciais temporarias 
+  final String correctUsername = 'admin';
+  final String correctPassword = '1234';
+  String? errorMessage;
+
+  void _login(){
+    final username = _usernameController.text.trim();
+    final password = _passwordController.text.trim();
+
+    if(username == correctUsername && password == correctPassword){
+      Navigator.pushReplacement(context, MaterialPageRoute(builder: (context)=> const HomePage()));
+    } else{
+      setState(() {
+        errorMessage = 'Nome de utilizador ou palavra-passe incorretos';
+      });
+    }
+  }
+
   @override
   void dispose() {
     _usernameController.dispose();
@@ -85,9 +104,7 @@ class _LoginPageState extends State<LoginPage> {
                 width: double.infinity,
                 height: 49,
                 child: ElevatedButton(
-                  onPressed: () {
-                    // Handle login
-                  },
+                  onPressed: _login,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Color(0xFF3B62FF),
                     shape: RoundedRectangleBorder(
@@ -131,6 +148,23 @@ class _LoginPageState extends State<LoginPage> {
           ),
         ),
       ),
+    );
+  }
+}
+
+class HomePage extends StatelessWidget{
+  const HomePage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Mane Menu')),
+      body: const Center(
+        child: Text(
+          'Bem-Vindo',
+          style: TextStyle(fontSize: 20),
+        )
+      )
     );
   }
 }
