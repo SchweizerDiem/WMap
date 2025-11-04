@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'login.dart';
 import 'register.dart';
 
@@ -39,7 +40,7 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Main Menu')),
+      appBar: AppBar(title: SvgPicture.asset('../assets/images/airplane-tilt.svg', height: 40)),
       bottomNavigationBar: NavigationBar(
         onDestinationSelected: (int index) {
           setState(() {
