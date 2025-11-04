@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'login.dart';
 import 'register.dart';
+import 'settings.dart';
+import 'profile.dart';
 
 void main() {
   runApp(const MyApp());
@@ -22,6 +23,7 @@ class MyApp extends StatelessWidget {
       routes: {
         '/home': (context) => const HomePage(),
         '/register': (context) => const RegisterPage(),
+         '/settings': (context) => const SettingsPage(),
       },
       debugShowCheckedModeBanner: false,
     );
@@ -40,7 +42,7 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: SvgPicture.asset('../assets/images/airplane-tilt.svg', height: 40)),
+      appBar: AppBar(title: const Text('Main Menu')),
       bottomNavigationBar: NavigationBar(
         onDestinationSelected: (int index) {
           setState(() {
@@ -72,18 +74,10 @@ class _HomePageState extends State<HomePage> {
           ),
         ),
         // Profile page
-        const Center(
-          child: Text(
-            'Profile View',
-            style: TextStyle(fontSize: 20),
-          ),
-        ),
+        const ProfilePage(),
         // Settings page
         const Center(
-          child: Text(
-            'Settings View',
-            style: TextStyle(fontSize: 20),
-          ),
+           child: SettingsPage(),
         ),
       ][currentPageIndex],
     );

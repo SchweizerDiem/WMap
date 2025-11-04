@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'user.dart';
 
 class RegisterPage extends StatefulWidget {
   const RegisterPage({super.key});
@@ -8,6 +9,7 @@ class RegisterPage extends StatefulWidget {
 }
 
 class _RegisterPageState extends State<RegisterPage> {
+  final _nameController = TextEditingController();
   final _usernameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
@@ -16,12 +18,13 @@ class _RegisterPageState extends State<RegisterPage> {
   String? errorMessage;
 
   void _register() {
+    final name = _nameController.text.trim();
     final username = _usernameController.text.trim();
     final email = _emailController.text.trim();
     final password = _passwordController.text;
     final confirm = _confirmController.text;
 
-    if (username.isEmpty || email.isEmpty || password.isEmpty || confirm.isEmpty) {
+    if (name.isEmpty || username.isEmpty || email.isEmpty || password.isEmpty || confirm.isEmpty) {
       setState(() {
         errorMessage = 'Please fill in all fields';
       });
@@ -35,12 +38,14 @@ class _RegisterPageState extends State<RegisterPage> {
       return;
     }
 
-    // For now, accept any registration and navigate to home.
-    Navigator.pushReplacementNamed(context, '/home');
+  // Save the entered name to the global notifier and navigate to home.
+  userNameNotifier.value = name;
+  Navigator.pushReplacementNamed(context, '/home');
   }
 
   @override
   void dispose() {
+    _nameController.dispose();
     _usernameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
@@ -68,6 +73,14 @@ class _RegisterPageState extends State<RegisterPage> {
                   ),
                 ),
                 const SizedBox(height: 16),
+                TextField(
+                  controller: _nameController,
+                  decoration: const InputDecoration(
+                    labelText: 'Name/Nickname',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 12),
                 TextField(
                   controller: _usernameController,
                   decoration: const InputDecoration(
