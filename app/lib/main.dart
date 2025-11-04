@@ -26,19 +26,65 @@ class MyApp extends StatelessWidget {
     );
   }
 }
-class HomePage extends StatelessWidget{
+class HomePage extends StatefulWidget {
   const HomePage({super.key});
+
+  @override
+  State<HomePage> createState() => _HomePageState();
+}
+
+class _HomePageState extends State<HomePage> {
+  int currentPageIndex = 0;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Main Menu')),
-      body: const Center(
-        child: Text(
-          'Bem-Vindo',
-          style: TextStyle(fontSize: 20),
-        )
-      )
+      bottomNavigationBar: NavigationBar(
+        onDestinationSelected: (int index) {
+          setState(() {
+            currentPageIndex = index;
+          });
+        },
+        selectedIndex: currentPageIndex,
+        destinations: const <Widget>[
+          NavigationDestination(
+            icon: Icon(Icons.map),
+            label: 'Map',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.person),
+            label: 'Profile',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.settings),
+            label: 'Settings',
+          ),
+        ],
+      ),
+      body: <Widget>[
+        // Map page
+        const Center(
+          child: Text(
+            'Map View',
+            style: TextStyle(fontSize: 20),
+          ),
+        ),
+        // Profile page
+        const Center(
+          child: Text(
+            'Profile View',
+            style: TextStyle(fontSize: 20),
+          ),
+        ),
+        // Settings page
+        const Center(
+          child: Text(
+            'Settings View',
+            style: TextStyle(fontSize: 20),
+          ),
+        ),
+      ][currentPageIndex],
     );
   }
 }
