@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:countries_world_map/countries_world_map.dart';
 import 'package:countries_world_map/data/maps/world_map.dart';
+import 'package:country_flags/country_flags.dart' as country_flags;
 import 'login.dart';
 import 'register.dart';
 import 'settings.dart';
@@ -93,7 +94,7 @@ class _HomePageState extends State<HomePage> {
                         // Draw country borders so they are visible
                         countryBorder: const CountryBorder(
                           color: Colors.black,
-                          width: 0.8,
+                          width: 0.4,
                         ),
 
                         // Fit the map to available space
@@ -101,11 +102,7 @@ class _HomePageState extends State<HomePage> {
 
                         // Provide a simple callback to show area details when tapped
                         callback: (id, name, tapdetails) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('Tapped: $name ($id)')),
-                          );
-                          // Keep print for quick debugging (non-fatal analyzer info)
-                          print('Tapped country: $id - $name');
+                          _showCountryInfoDialog(context, id, id);
                         },
                       ),
                     ),
@@ -122,6 +119,53 @@ class _HomePageState extends State<HomePage> {
            child: SettingsPage(),
         ),
       ][currentPageIndex],
+    );
+  }
+
+  void _showCountryInfoDialog(BuildContext context, String countryCode, String countryName) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return Dialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(20.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Display the flag with appropriate size
+                SizedBox(
+                  width: 60,
+                  height: 40,
+                  child: country_flags.CountryFlag.fromCountryCode(
+                    countryCode,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                // Display the country name
+                Text(
+                  "$countryName",
+                  style: const TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 20),
+                // Close button
+                ElevatedButton(
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                  },
+                  child: const Text('Close'),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }
