@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:countries_world_map/countries_world_map.dart';
+import 'package:countries_world_map/data/maps/world_map.dart';
 import 'login.dart';
 import 'register.dart';
 import 'settings.dart';
@@ -67,11 +69,50 @@ class _HomePageState extends State<HomePage> {
         ],
       ),
       body: <Widget>[
-        // Map page
-        const Center(
-          child: Text(
-            'Map View',
-            style: TextStyle(fontSize: 20),
+        // Map page - make it take most of the available space and show borders
+        Container(
+          //color: Colors.blue.shade50,
+          color: const Color.fromARGB(255, 255, 255, 255),
+          child: Column(
+            children: [
+              // Give the map most of the vertical space
+              Expanded(
+                child: InteractiveViewer(
+                  maxScale: 20.0,
+                  child: Center(
+                    child: SizedBox(
+                      width: double.infinity,
+                      height: double.infinity,
+                      child: SimpleMap(
+                        // Use the built-in world map instructions
+                        instructions: SMapWorld.instructions,
+
+                        // Make all countries gray
+                        defaultColor: Colors.grey,
+
+                        // Draw country borders so they are visible
+                        countryBorder: const CountryBorder(
+                          color: Colors.black,
+                          width: 0.8,
+                        ),
+
+                        // Fit the map to available space
+                        fit: BoxFit.contain,
+
+                        // Provide a simple callback to show area details when tapped
+                        callback: (id, name, tapdetails) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Tapped: $name ($id)')),
+                          );
+                          // Keep print for quick debugging (non-fatal analyzer info)
+                          print('Tapped country: $id - $name');
+                        },
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
         // Profile page
