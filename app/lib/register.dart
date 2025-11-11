@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'user.dart';
+import 'session_manager.dart';
 
 class RegisterPage extends StatefulWidget {
   const RegisterPage({super.key});
@@ -15,7 +16,37 @@ class _RegisterPageState extends State<RegisterPage> {
   final _passwordController = TextEditingController();
   final _confirmController = TextEditingController();
 
+  // ValueNotifier to track password changes in real-time
+  late final ValueNotifier<String> _passwordNotifier;
+
   String? errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _passwordNotifier = ValueNotifier<String>('');
+    _passwordController.addListener(() {
+      _passwordNotifier.value = _passwordController.text;
+    });
+  }
+
+  // Validate email format: must contain @ and a domain extension like .com
+  bool _isValidEmail(String email) {
+    final emailRegex = RegExp(r'^[^@]+@[^@]+\.[a-zA-Z]{2,}$');
+    return emailRegex.hasMatch(email);
+  }
+
+  // Validate password: minimum 12 chars, uppercase, lowercase, special chars, and numbers
+  bool _isValidPassword(String password) {
+    if (password.length < 12) return false;
+    if (!RegExp(r'[A-Z]').hasMatch(password)) return false; // uppercase
+    if (!RegExp(r'[a-z]').hasMatch(password)) return false; // lowercase
+    if (!RegExp(r'[0-9]').hasMatch(password)) return false; // number
+    // Check for special characters: !@#$%^&*()_+-=[]{}; etc
+    final specialCharRegex = RegExp(r'[!@#$%^&*()_+\-=\[\]{};:`~<>?/\\|.,]');
+    if (!specialCharRegex.hasMatch(password)) return false;
+    return true;
+  }
 
   void _register() {
     final name = _nameController.text.trim();
@@ -31,6 +62,20 @@ class _RegisterPageState extends State<RegisterPage> {
       return;
     }
 
+    if (!_isValidEmail(email)) {
+      setState(() {
+        errorMessage = 'Invalid email format. Email must contain @ and a domain (e.g., .com)';
+      });
+      return;
+    }
+
+    if (!_isValidPassword(password)) {
+      setState(() {
+        errorMessage = 'Password must have at least 12 characters, uppercase, lowercase, numbers, and special characters';
+      });
+      return;
+    }
+
     if (password != confirm) {
       setState(() {
         errorMessage = 'Passwords do not match';
@@ -38,9 +83,18 @@ class _RegisterPageState extends State<RegisterPage> {
       return;
     }
 
-  // Save the entered name to the global notifier and navigate to home.
-  userNameNotifier.value = name;
-  Navigator.pushReplacementNamed(context, '/home');
+    // Try to register the account in the session
+    final sessionManager = SessionManager();
+    if (!sessionManager.registerAccount(name, username, email, password)) {
+      setState(() {
+        errorMessage = 'Email or username already registered';
+      });
+      return;
+    }
+
+    // Save the entered name to the global notifier and navigate to home.
+    userNameNotifier.value = name;
+    Navigator.pushReplacementNamed(context, '/home');
   }
 
   @override
@@ -50,6 +104,7 @@ class _RegisterPageState extends State<RegisterPage> {
     _emailController.dispose();
     _passwordController.dispose();
     _confirmController.dispose();
+    _passwordNotifier.dispose();
     super.dispose();
   }
 
@@ -106,6 +161,12 @@ class _RegisterPageState extends State<RegisterPage> {
                   obscureText: true,
                 ),
                 const SizedBox(height: 12),
+                // Password Requirements Widget
+                PasswordRequirementsWidget(
+                  passwordNotifier: _passwordNotifier,
+                  isValidPassword: _isValidPassword,
+                ),
+                const SizedBox(height: 12),
                 TextField(
                   controller: _confirmController,
                   decoration: const InputDecoration(
@@ -153,6 +214,110 @@ class _RegisterPageState extends State<RegisterPage> {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+// Widget para exibir requisitos de password em tempo real
+class PasswordRequirementsWidget extends StatelessWidget {
+  final ValueNotifier<String> passwordNotifier;
+  final bool Function(String) isValidPassword;
+
+  const PasswordRequirementsWidget({
+    super.key,
+    required this.passwordNotifier,
+    required this.isValidPassword,
+  });
+
+  bool _hasMinLength(String password) => password.length >= 12;
+  bool _hasUppercase(String password) => RegExp(r'[A-Z]').hasMatch(password);
+  bool _hasLowercase(String password) => RegExp(r'[a-z]').hasMatch(password);
+  bool _hasNumber(String password) => RegExp(r'[0-9]').hasMatch(password);
+  bool _hasSpecialChar(String password) =>
+      RegExp(r'[!@#$%^&*()_+\-=\[\]{};:`~<>?/\\|.,]').hasMatch(password);
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<String>(
+      valueListenable: passwordNotifier,
+      builder: (context, password, child) {
+        return Container(
+          padding: const EdgeInsets.all(12.0),
+          decoration: BoxDecoration(
+            border: Border.all(color: Colors.grey.shade300),
+            borderRadius: BorderRadius.circular(8),
+            color: Colors.grey.shade50,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Password Requirements:',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 12,
+                ),
+              ),
+              const SizedBox(height: 8),
+              _RequirementRow(
+                label: 'At least 12 characters',
+                isMet: _hasMinLength(password),
+              ),
+              _RequirementRow(
+                label: 'Uppercase letter (A-Z)',
+                isMet: _hasUppercase(password),
+              ),
+              _RequirementRow(
+                label: 'Lowercase letter (a-z)',
+                isMet: _hasLowercase(password),
+              ),
+              _RequirementRow(
+                label: 'Number (0-9)',
+                isMet: _hasNumber(password),
+              ),
+              _RequirementRow(
+                label: 'Special character (!@#\$%...)',
+                isMet: _hasSpecialChar(password),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+// Widget para cada linha de requisito
+class _RequirementRow extends StatelessWidget {
+  final String label;
+  final bool isMet;
+
+  const _RequirementRow({
+    required this.label,
+    required this.isMet,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4.0),
+      child: Row(
+        children: [
+          Icon(
+            isMet ? Icons.check_circle : Icons.cancel,
+            color: isMet ? Colors.green : Colors.red,
+            size: 18,
+          ),
+          const SizedBox(width: 8),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              color: isMet ? Colors.green : Colors.red,
+            ),
+          ),
+        ],
       ),
     );
   }

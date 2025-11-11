@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'session_manager.dart';
+import 'user.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -11,22 +13,32 @@ class _LoginPageState extends State<LoginPage> {
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
 
-  // credenciais temporarias
-  final String correctUsername = 'admin';
-  final String correctPassword = '1234';
   String? errorMessage;
 
   void _login() {
-    final username = _usernameController.text.trim();
+    final emailOrUsername = _usernameController.text.trim();
     final password = _passwordController.text.trim();
 
-    if (username == correctUsername && password == correctPassword) {
-      // Use a named route to avoid importing HomePage here and creating a
-      // circular import with main.dart
+    if (emailOrUsername.isEmpty || password.isEmpty) {
+      setState(() {
+        errorMessage = 'Please enter username/email and password';
+      });
+      return;
+    }
+
+    // Try to login with session data
+    final sessionManager = SessionManager();
+    if (sessionManager.login(emailOrUsername, password)) {
+      // Get the logged-in user and update the global notifier
+      final user = sessionManager.getCurrentUser();
+      if (user != null) {
+        userNameNotifier.value = user.name;
+      }
+      // Navigate to home
       Navigator.pushReplacementNamed(context, '/home');
     } else {
       setState(() {
-        errorMessage = 'Nome de utilizador ou palavra-passe incorretos';
+        errorMessage = 'Invalid username/email or password';
       });
     }
   }
@@ -85,6 +97,14 @@ class _LoginPageState extends State<LoginPage> {
                 obscureText: true,
               ),
               const SizedBox(height: 26),
+              if (errorMessage != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12.0),
+                  child: Text(
+                    errorMessage!,
+                    style: const TextStyle(color: Colors.red),
+                  ),
+                ),
               SizedBox(
                 width: double.infinity,
                 height: 49,

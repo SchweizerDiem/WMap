@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'user.dart';
+import 'session_manager.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -119,13 +120,31 @@ class _SettingsPageState extends State<SettingsPage> {
                         ),
                         TextButton(
                           onPressed: () {
-                            // TODO: Implement account deletion
+                            final sessionManager = SessionManager();
+                            final deleted = sessionManager.deleteCurrentUser();
                             Navigator.of(context).pop();
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Account deletion not implemented yet'),
-                              ),
-                            );
+                            if (deleted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Account deleted successfully'),
+                                ),
+                              );
+                              // Navigate to login page after a short delay
+                              Future.delayed(const Duration(milliseconds: 500), () {
+                                if (context.mounted) {
+                                  Navigator.of(context).pushNamedAndRemoveUntil(
+                                    '/',
+                                    (Route<dynamic> route) => false,
+                                  );
+                                }
+                              });
+                            } else {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Error deleting account'),
+                                ),
+                              );
+                            }
                           },
                           style: TextButton.styleFrom(foregroundColor: Colors.red),
                           child: const Text('Delete'),
