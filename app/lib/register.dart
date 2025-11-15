@@ -92,8 +92,13 @@ class _RegisterPageState extends State<RegisterPage> {
       return;
     }
 
-    // Save the entered name to the global notifier and navigate to home.
-    userNameNotifier.value = name;
+    // Log the user in and navigate to home.
+    if (sessionManager.login(email, password)) {
+      final user = sessionManager.getCurrentUser();
+      if (user != null) {
+        userNameNotifier.value = user.name;
+      }
+    }
     Navigator.pushReplacementNamed(context, '/home');
   }
 

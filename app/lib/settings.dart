@@ -3,7 +3,8 @@ import 'user.dart';
 import 'session_manager.dart';
 
 class SettingsPage extends StatefulWidget {
-  const SettingsPage({super.key});
+  final VoidCallback? onBackPressed;
+  const SettingsPage({super.key, this.onBackPressed});
 
   @override
   State<SettingsPage> createState() => _SettingsPageState();
@@ -30,18 +31,12 @@ class _SettingsPageState extends State<SettingsPage> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Settings'),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () {
-            // If this page was pushed onto the navigator stack, pop it.
-            // If it is embedded in the HomePage (no back history), navigate to '/home'.
-            if (Navigator.of(context).canPop()) {
-              Navigator.of(context).pop();
-            } else {
-              Navigator.of(context).pushNamedAndRemoveUntil('/home', (Route<dynamic> route) => false);
-            }
-          },
-        ),
+        leading: widget.onBackPressed != null
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back),
+                onPressed: widget.onBackPressed,
+              )
+            : null,
       ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
