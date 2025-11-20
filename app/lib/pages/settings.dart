@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'user.dart';
-import 'session_manager.dart';
+import '../user.dart';
+import '../session_manager.dart';
 
 class SettingsPage extends StatefulWidget {
   final VoidCallback? onBackPressed;

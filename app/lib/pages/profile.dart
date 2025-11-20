@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:country_flags/country_flags.dart' as country_flags;
-import 'user.dart';
-import 'session_manager.dart';
+import '../user.dart';
+import '../session_manager.dart';
 
 class ProfilePage extends StatelessWidget {
   final VoidCallback? onBackPressed;

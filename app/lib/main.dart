@@ -3,10 +3,14 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:countries_world_map/countries_world_map.dart';
 import 'package:countries_world_map/data/maps/world_map.dart';
 import 'package:country_flags/country_flags.dart' as country_flags;
-import 'login.dart';
-import 'register.dart';
-import 'settings.dart';
-import 'profile.dart';
+
+// Pages
+import'./pages/welcome.dart';
+import './pages/login.dart';
+import './pages/register.dart';
+import './pages/settings.dart';
+import './pages/profile.dart';
+
 import 'session_manager.dart';
 
 void main() {
@@ -19,14 +23,15 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Login Page',
+      title: 'Welcome Page',
       theme: ThemeData(
         primarySwatch: Colors.blue,
       ),
-      home: LoginPage(),
+      home: WelcomePage(),
       // Register the home route so the login page can navigate here
       routes: {
         '/home': (context) => const HomePage(),
+        '/login': (context) => const LoginPage(),
         '/register': (context) => const RegisterPage(),
          '/settings': (context) => const SettingsPage(),
       },
