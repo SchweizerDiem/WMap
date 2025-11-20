@@ -9,6 +9,11 @@ import 'settings.dart';
 import 'profile.dart';
 import 'session_manager.dart';
 
+// Garante que os códigos seguem o formato do mapa: iso2 lowercase
+String normalizeCountryCode(String code) {
+  return code.toLowerCase();
+}
+
 void main() {
   runApp(const MyApp());
 }
@@ -451,7 +456,8 @@ class _HomePageState extends State<HomePage> {
                                     
                                     // Nacionalidades em laranja
                                     for (var code in _nationalityCountries) {
-                                      colorMap[code] = Colors.orange;
+                                      final c2 = normalizeCountryCode(code);
+                                      colorMap[c2] = Colors.orange;
                                     }
                                     
                                     // Visitados em verde (sobrepõe laranja)
@@ -462,7 +468,6 @@ class _HomePageState extends State<HomePage> {
                                     for (var code in planned) {
                                       colorMap.putIfAbsent(code, () => Colors.blue);
                                     }
-
                                     return SimpleMap(
                                       instructions: SMapWorld.instructions,
                                       defaultColor: Colors.grey,
