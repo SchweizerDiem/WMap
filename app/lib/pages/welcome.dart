@@ -55,7 +55,7 @@ class WelcomePage extends StatelessWidget {
                 height: 55,
                 width: 200,
                 decoration:  BoxDecoration(
-                 color: Color(0xff55433C),
+                 color: Color(0xffff6363),
                  borderRadius: BorderRadius.circular(30),
                 ),
                 child: Padding(
@@ -73,7 +73,7 @@ class WelcomePage extends StatelessWidget {
                       ),
                       Spacer(),
                       CircleAvatar(
-                        backgroundColor: Color(0xffA97C37),
+                        backgroundColor: Color(0xff6c63ff),
                         child: Icon(Icons.arrow_forward, color: Colors.white),
                       )
                     ],

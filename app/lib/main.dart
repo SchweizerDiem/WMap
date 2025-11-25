@@ -401,6 +401,14 @@ class _HomePageState extends State<HomePage> {
             label: 'Map',
           ),
           NavigationDestination(
+            icon: Icon(Icons.people),
+            label: 'Friends',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.home),
+            label: 'Hub',
+          ),
+          NavigationDestination(
             icon: Icon(Icons.person),
             label: 'Profile',
           ),
