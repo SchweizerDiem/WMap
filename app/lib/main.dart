@@ -5,11 +5,13 @@ import 'package:countries_world_map/data/maps/world_map.dart';
 import 'package:country_flags/country_flags.dart' as country_flags;
 
 // Pages
-import'./pages/welcome.dart';
+import './pages/welcome.dart';
 import './pages/login.dart';
 import './pages/register.dart';
 import './pages/settings.dart';
 import './pages/profile.dart';
+import './pages/friends.dart';
+import './pages/hub.dart';
 
 import 'session_manager.dart';
 
@@ -506,6 +508,12 @@ class _HomePageState extends State<HomePage> {
             ],
           ),
         ),
+        // Friends page (placeholder)
+        const FriendsPage(),
+
+        // Hub page (placeholder)
+        const HubPage(),
+
         // Profile page
         ProfilePage(
           onBackPressed: () {
@@ -514,6 +522,7 @@ class _HomePageState extends State<HomePage> {
             });
           },
         ),
+
         // Settings page
         Center(
           child: SettingsPage(
