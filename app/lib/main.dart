@@ -463,16 +463,16 @@ class _HomePageState extends State<HomePage> {
                                     // Nacionalidades em laranja
                                     for (var code in _nationalityCountries) {
                                       final c2 = normalizeCountryCode(code);
-                                      colorMap[c2] = Colors.orange;
+                                      colorMap[c2] = const Color.fromARGB(255, 9, 181, 233);
                                     }
                                     
                                     // Visitados em verde (sobrepõe laranja)
                                     for (var code in visited) {
-                                      colorMap[code] = Colors.green;
+                                      colorMap[code] = const Color.fromARGB(255, 31, 131, 212);
                                     }
                                     // Planeados em azul (não sobrepõe visitado ou nacionalidade)
                                     for (var code in planned) {
-                                      colorMap.putIfAbsent(code, () => Colors.blue);
+                                      colorMap.putIfAbsent(code, () => const Color.fromARGB(255, 6, 16, 148));
                                     }
                                     return SimpleMap(
                                       instructions: SMapWorld.instructions,
@@ -573,10 +573,10 @@ class _HomePageState extends State<HomePage> {
                           });
                         },
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: isVisited ? Colors.green : null,
+                          backgroundColor: isVisited ? Color.fromARGB(255, 31, 131, 212): null,
                           foregroundColor: isVisited ? Colors.white : null,
                         ),
-                        child: Text(isVisited ? 'Visitado ✓' : 'Visitado'),
+                        child: Text(isVisited ? 'Visited ✓' : 'Visited'),
                       ),
                       ElevatedButton(
                         onPressed: () {
@@ -589,7 +589,7 @@ class _HomePageState extends State<HomePage> {
                           });
                         },
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: isPlanned ? Colors.blue : null,
+                          backgroundColor: isPlanned ? Color.fromARGB(255, 6, 16, 148) : null,
                           foregroundColor: isPlanned ? Colors.white : null,
                         ),
                         child: Text(isPlanned ? 'Future Trip ✓' : 'Future Trip'),
