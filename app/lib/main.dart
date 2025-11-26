@@ -550,71 +550,83 @@ class _HomePageState extends State<HomePage> {
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(16),
             ),
-            child: Padding(
-              padding: const EdgeInsets.all(20.0),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  SizedBox(
-                    width: 60,
-                    height: 40,
-                    child: country_flags.CountryFlag.fromCountryCode(countryCode),
-                  ),
-                  const SizedBox(height: 20),
-                  Text(
-                    countryName,
-                    style: const TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 20),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            // O Dialog agora contém um Stack para sobrepor o ícone de fechar
+            child: Stack(
+              clipBehavior: Clip.none, // Permite que o botão se estenda para fora do padding, se necessário
+              children: [
+                // 1. Conteúdo Principal do Diálogo
+                Padding(
+                  padding: const EdgeInsets.all(20.0),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      ElevatedButton(
-                        onPressed: () {
-                          Navigator.of(context).pop();
-                        },
-                        child: const Text('Close'),
+                      SizedBox(
+                        width: 60,
+                        height: 40,
+                        child: country_flags.CountryFlag.fromCountryCode(countryCode),
                       ),
-                      ElevatedButton(
-                        onPressed: () {
-                          session.toggleVisitedForCurrentUser(countryCode);
-                          isVisited = session.isCountryVisitedForCurrentUser(countryCode);
-                          isPlanned = SessionManager().isCountryPlannedForCurrentUser(countryCode);
-                          setState(() {});
-                          Future.delayed(const Duration(milliseconds: 300), () {
-                            if (context.mounted) Navigator.of(context).pop();
-                          });
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: isVisited ? Color.fromARGB(255, 31, 131, 212): null,
-                          foregroundColor: isVisited ? Colors.white : null,
+                      const SizedBox(height: 20),
+                      Text(
+                        countryName,
+                        style: const TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
                         ),
-                        child: Text(isVisited ? 'Visited ✓' : 'Visited'),
+                        textAlign: TextAlign.center,
                       ),
-                      ElevatedButton(
-                        onPressed: () {
-                          session.togglePlannedForCurrentUser(countryCode);
-                          isVisited = session.isCountryVisitedForCurrentUser(countryCode);
-                          isPlanned = SessionManager().isCountryPlannedForCurrentUser(countryCode);
-                          setState(() {});
-                          Future.delayed(const Duration(milliseconds: 300), () {
-                            if (context.mounted) Navigator.of(context).pop();
-                          });
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: isPlanned ? Color.fromARGB(255, 6, 16, 148) : null,
-                          foregroundColor: isPlanned ? Colors.white : null,
-                        ),
-                        child: Text(isPlanned ? 'Future Trip ✓' : 'Future Trip'),
+                      const SizedBox(height: 20),
+                      
+                      // 2. Row apenas com os botões "Visited" e "Future Trip"
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: [
+                          // Botão 'Visited'
+                          Expanded(
+                            child: ElevatedButton(
+                              onPressed: () {
+                                session.toggleVisitedForCurrentUser(countryCode);
+                                isVisited = session.isCountryVisitedForCurrentUser(countryCode);
+                                isPlanned = SessionManager().isCountryPlannedForCurrentUser(countryCode);
+                                setState(() {});
+                                Future.delayed(const Duration(milliseconds: 300), () {
+                                  if (context.mounted) Navigator.of(context).pop();
+                                });
+                              },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: isVisited ? const Color.fromARGB(255, 31, 131, 212): null,
+                                foregroundColor: isVisited ? Colors.white : null,
+                                padding: const EdgeInsets.symmetric(horizontal: 4), 
+                              ),
+                              child: Text(isVisited ? 'Visited ✓' : 'Visited'),
+                            ),
+                          ),
+                          const SizedBox(width: 8), 
+                          // Botão 'Future Trip'
+                          Expanded(
+                            child: ElevatedButton(
+                              onPressed: () {
+                                session.togglePlannedForCurrentUser(countryCode);
+                                isVisited = session.isCountryVisitedForCurrentUser(countryCode);
+                                isPlanned = SessionManager().isCountryPlannedForCurrentUser(countryCode);
+                                setState(() {});
+                                Future.delayed(const Duration(milliseconds: 300), () {
+                                  if (context.mounted) Navigator.of(context).pop();
+                                });
+                              },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: isPlanned ? const Color.fromARGB(255, 6, 16, 148) : null,
+                                foregroundColor: isPlanned ? Colors.white : null,
+                                padding: const EdgeInsets.symmetric(horizontal: 4), 
+                              ),
+                              child: Text(isPlanned ? 'Future Trip ✓' : 'Future Trip'),
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           );
         });

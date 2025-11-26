@@ -63,9 +63,8 @@ class _LoginPageState extends State<LoginPage> {
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [
-              // tom de verde até azul; ajuste os hex se preferir outros tons
-              Color.fromARGB(255, 17, 236, 72),
-              Color.fromARGB(255, 67, 100, 233),
+              Color(0xffff6363),
+              Color(0xff6c63ff),
             ],
           ),
         ),
@@ -141,7 +140,7 @@ class _LoginPageState extends State<LoginPage> {
                     child: ElevatedButton(
                       onPressed: _login,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF3B62FF),
+                        backgroundColor: Color(0xff6c63ff),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10),
                         ),

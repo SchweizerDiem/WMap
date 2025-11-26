@@ -125,9 +125,8 @@ class _RegisterPageState extends State<RegisterPage> {
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [
-              // mesmas cores usadas na página de login
-              Color.fromARGB(255, 17, 236, 72),
-              Color.fromARGB(255, 67, 100, 233),
+            Color(0xffff6363),
+            Color(0xff6c63ff),
             ],
           ),
         ),
@@ -214,7 +213,7 @@ class _RegisterPageState extends State<RegisterPage> {
                     child: ElevatedButton(
                       onPressed: _register,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF3B62FF),
+                        backgroundColor: Color(0xff6c63ff),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10),
                         ),
