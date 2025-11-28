@@ -302,13 +302,21 @@ class _HomePageState extends State<HomePage> {
       barrierDismissible: false,
       builder: (context) {
         final selectedSet = <String>{};
+        final searchController = TextEditingController();
         return StatefulBuilder(
           builder: (context, setState) {
+            // Filter countries based on search query
+            final query = searchController.text.toLowerCase();
+            final filtered = countries.where((c) {
+              final name = c['name']!.toLowerCase();
+              return name.contains(query);
+            }).toList();
+
             return AlertDialog(
               title: const Text('Select your nationalities'),
               content: SizedBox(
                 width: double.maxFinite,
-                height: 320,
+                height: 380,
                 child: Column(
                   children: [
                     const Text(
@@ -316,36 +324,69 @@ class _HomePageState extends State<HomePage> {
                       style: TextStyle(fontSize: 12),
                     ),
                     const SizedBox(height: 12),
+                    // Search bar
+                    TextField(
+                      controller: searchController,
+                      decoration: InputDecoration(
+                        hintText: 'Search countries...',
+                        prefixIcon: const Icon(Icons.search),
+                        suffixIcon: searchController.text.isNotEmpty
+                            ? IconButton(
+                                icon: const Icon(Icons.clear),
+                                onPressed: () {
+                                  setState(() {
+                                    searchController.clear();
+                                  });
+                                },
+                              )
+                            : null,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                      ),
+                      onChanged: (value) {
+                        setState(() {});
+                      },
+                    ),
+                    const SizedBox(height: 12),
                     Expanded(
                       child: Scrollbar(
                         thumbVisibility: true,
-                        child: ListView.builder(
-                          itemCount: countries.length,
-                          itemBuilder: (context, index) {
-                            final c = countries[index];
-                            final code = c['code']!;
-                            final name = c['name']!;
-                            final flag = _countryCodeToEmoji(code);
-                            return CheckboxListTile(
-                              value: selectedSet.contains(code),
-                              onChanged: (val) {
-                                setState(() {
-                                  if (val == true) {
-                                    selectedSet.add(code);
-                                  } else {
-                                    selectedSet.remove(code);
-                                  }
-                                });
-                              },
-                              secondary: Text(
-                                flag,
-                                style: const TextStyle(fontSize: 24),
+                        child: filtered.isEmpty
+                            ? Center(
+                                child: Text(
+                                  'No countries found for "${searchController.text}"',
+                                  style: TextStyle(color: Colors.grey[600]),
+                                ),
+                              )
+                            : ListView.builder(
+                                itemCount: filtered.length,
+                                itemBuilder: (context, index) {
+                                  final c = filtered[index];
+                                  final code = c['code']!;
+                                  final name = c['name']!;
+                                  final flag = _countryCodeToEmoji(code);
+                                  return CheckboxListTile(
+                                    value: selectedSet.contains(code),
+                                    onChanged: (val) {
+                                      setState(() {
+                                        if (val == true) {
+                                          selectedSet.add(code);
+                                        } else {
+                                          selectedSet.remove(code);
+                                        }
+                                      });
+                                    },
+                                    secondary: Text(
+                                      flag,
+                                      style: const TextStyle(fontSize: 24),
+                                    ),
+                                    title: Text(name),
+                                    controlAffinity: ListTileControlAffinity.leading,
+                                  );
+                                },
                               ),
-                              title: Text(name),
-                              controlAffinity: ListTileControlAffinity.leading,
-                            );
-                          },
-                        ),
                       ),
                     ),
                   ],
@@ -471,7 +512,7 @@ class _HomePageState extends State<HomePage> {
                                     final planned = SessionManager().getPlannedCountriesForCurrentUser();
                                     final Map<String, Color> colorMap = {};
                                     
-                                    // Nacionalidades em laranja
+                                    // Nacionalidades em azul claro
                                     for (var code in _nationalityCountries) {
                                       final c2 = normalizeCountryCode(code);
                                       colorMap[c2] = const Color.fromARGB(255, 9, 181, 233);
@@ -589,7 +630,7 @@ class _HomePageState extends State<HomePage> {
                           ),
                         ),
                       ] else ...[
-                        // 2. Row apenas com os botões "Visited" e "Future Trip"
+                        // Row apenas com os botões "Visited" e "Future Trip"
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                           children: [

@@ -231,7 +231,7 @@ class _ProfilePageState extends State<ProfilePage> {
                             const Align(
                               alignment: Alignment.center,
                               child: Text(
-                                'Percentagem de países visitados',
+                                'Percentage of World Visited',
                                 textAlign: TextAlign.center,
                                 style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                               ),
