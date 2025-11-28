@@ -219,49 +219,61 @@ class _ProfilePageState extends State<ProfilePage> {
                       ),
                     ),
                     const SizedBox(height: 12),
-                    // Label for the percentage (numeric percentage is shown inside the bar)
-                    Row(
-                      children: const [
-                        Text('Percentage of the world visited:'),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    // Animated visual progress bar corresponding to percent (0.0 - 1.0)
-                    TweenAnimationBuilder<double>(
-                      tween: Tween<double>(begin: 0.0, end: (percent / 100).clamp(0.0, 1.0)),
-                      duration: const Duration(milliseconds: 700),
-                      curve: Curves.easeOutCubic,
-                      builder: (context, animatedValue, child) {
-                        // Determine a readable text color depending on primary color luminance
-                        final primary = Theme.of(context).colorScheme.primary;
-                        final displayedPercent = (animatedValue * 100).clamp(0.0, 100.0);
-                        return Column(
-                          mainAxisSize: MainAxisSize.min,
+                    // Percentage card: title + animated progress bar underneath
+                    Card(
+                      elevation: 2,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      child: Padding(
+                        padding: const EdgeInsets.all(12.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(8),
-                              child: SizedBox(
-                                width: double.infinity,
-                                child: LinearProgressIndicator(
-                                  value: animatedValue,
-                                  minHeight: 16,
-                                  color: primary,
-                                  backgroundColor: Theme.of(context).colorScheme.onSurface.withOpacity(0.12),
-                                ),
+                            const Align(
+                              alignment: Alignment.center,
+                              child: Text(
+                                'Percentagem de países visitados',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                               ),
                             ),
-                            const SizedBox(height: 8),
-                            // Animated percentage label centered below the bar
-                            Text(
-                              '${displayedPercent.toStringAsFixed(1)}%',
-                              style: TextStyle(
-                                color: Theme.of(context).textTheme.bodyMedium?.color,
-                                fontWeight: FontWeight.w600,
-                              ),
+                            const SizedBox(height: 12),
+                            TweenAnimationBuilder<double>(
+                              tween: Tween<double>(begin: 0.0, end: (percent / 100).clamp(0.0, 1.0)),
+                              duration: const Duration(milliseconds: 700),
+                              curve: Curves.easeOutCubic,
+                              builder: (context, animatedValue, child) {
+                                final primary = Theme.of(context).colorScheme.primary;
+                                final displayedPercent = (animatedValue * 100).clamp(0.0, 100.0);
+                                return Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    ClipRRect(
+                                      borderRadius: BorderRadius.circular(8),
+                                      child: SizedBox(
+                                        width: double.infinity,
+                                        child: LinearProgressIndicator(
+                                          value: animatedValue,
+                                          minHeight: 16,
+                                          color: primary,
+                                          backgroundColor: Theme.of(context).colorScheme.onSurface.withOpacity(0.12),
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      '${displayedPercent.toStringAsFixed(1)}%',
+                                      style: TextStyle(
+                                        color: Theme.of(context).textTheme.bodyMedium?.color,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ],
+                                );
+                              },
                             ),
                           ],
-                        );
-                      },
+                        ),
+                      ),
                     ),
                   ],
                 );
