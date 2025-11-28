@@ -1,11 +1,45 @@
 import 'package:flutter/material.dart';
 import 'package:country_flags/country_flags.dart' as country_flags;
+import 'package:image_picker/image_picker.dart';
+import 'dart:io';
 import '../user.dart';
 import '../session_manager.dart';
+import '../profile_manager.dart';
 
-class ProfilePage extends StatelessWidget {
+class ProfilePage extends StatefulWidget {
   final VoidCallback? onBackPressed;
   const ProfilePage({super.key, this.onBackPressed});
+
+  @override
+  State<ProfilePage> createState() => _ProfilePageState();
+}
+
+class _ProfilePageState extends State<ProfilePage> {
+  final ImagePicker _imagePicker = ImagePicker();
+  late ProfileManager _profileManager;
+
+  @override
+  void initState() {
+    super.initState();
+    _profileManager = ProfileManager();
+  }
+
+  Future<void> _pickImageFromGallery() async {
+    try {
+      final XFile? pickedFile = await _imagePicker.pickImage(
+        source: ImageSource.gallery,
+      );
+      if (pickedFile != null) {
+        _profileManager.setProfileImage(File(pickedFile.path));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error picking image: $e')),
+        );
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -13,10 +47,10 @@ class ProfilePage extends StatelessWidget {
       appBar: AppBar(
         title: const Text('Profile'),
         centerTitle: true,
-        leading: onBackPressed != null
+        leading: widget.onBackPressed != null
             ? IconButton(
                 icon: const Icon(Icons.arrow_back),
-                onPressed: onBackPressed,
+                onPressed: widget.onBackPressed,
               )
             : null,
       ),
@@ -26,14 +60,78 @@ class ProfilePage extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             const SizedBox(height: 8),
-            // Placeholder for user photo
-            const CircleAvatar(
-              radius: 48,
-              backgroundColor: Colors.grey,
-              child: Icon(
-                Icons.person,
-                size: 48,
-                color: Colors.white,
+            // Profile photo button with camera overlay
+            GestureDetector(
+              onTap: _pickImageFromGallery,
+              child: ValueListenableBuilder<File?>(
+                valueListenable: _profileManager.profileImageNotifier,
+                builder: (context, profileImage, child) {
+                  if (profileImage != null) {
+                    return Stack(
+                      children: [
+                        CircleAvatar(
+                          radius: 48,
+                          backgroundImage: FileImage(profileImage),
+                        ),
+                        Positioned(
+                          bottom: 0,
+                          right: 0,
+                          child: Container(
+                            width: 32,
+                            height: 32,
+                            decoration: BoxDecoration(
+                              color: Colors.blue,
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: Colors.white,
+                                width: 2,
+                              ),
+                            ),
+                            child: const Icon(
+                              Icons.camera_alt,
+                              color: Colors.white,
+                              size: 16,
+                            ),
+                          ),
+                        ),
+                      ],
+                    );
+                  }
+                  return Stack(
+                    children: [
+                      const CircleAvatar(
+                        radius: 48,
+                        backgroundColor: Colors.grey,
+                        child: Icon(
+                          Icons.person,
+                          size: 48,
+                          color: Colors.white,
+                        ),
+                      ),
+                      Positioned(
+                        bottom: 0,
+                        right: 0,
+                        child: Container(
+                          width: 32,
+                          height: 32,
+                          decoration: BoxDecoration(
+                            color: Colors.blue,
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: Colors.white,
+                              width: 2,
+                            ),
+                          ),
+                          child: const Icon(
+                            Icons.camera_alt,
+                            color: Colors.white,
+                            size: 16,
+                          ),
+                        ),
+                      ),
+                    ],
+                  );
+                },
               ),
             ),
             const SizedBox(height: 16),
@@ -116,7 +214,7 @@ class ProfilePage extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             const Text(
-              'More profile features (photo upload, stats tracking) will be added later.',
+              'Tap your profile picture to change it.',
               textAlign: TextAlign.center,
               style: TextStyle(color: Colors.grey),
             ),

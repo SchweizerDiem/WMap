@@ -311,7 +311,7 @@ class _HomePageState extends State<HomePage> {
                 child: Column(
                   children: [
                     const Text(
-                      'Choose one or more countries. Selected countries will be highlighted on the map in orange.',
+                      'Choose one or more countries. Selected countries will be highlighted on the map.',
                       style: TextStyle(fontSize: 12),
                     ),
                     const SizedBox(height: 12),
