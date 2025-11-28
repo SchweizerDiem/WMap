@@ -135,11 +135,12 @@ class SessionManager {
   /// Mark a country as visited for the current user
   bool markCountryVisitedForCurrentUser(String countryCode) {
     if (_currentUser == null) return false;
-    final already = _currentUser!.visitedCountries.contains(countryCode);
+    final code = countryCode.toUpperCase();
+    final already = _currentUser!.visitedCountries.contains(code);
     if (already) return false;
     // Add to visited and remove from planned if present
-    final newVisited = Set<String>.from(_currentUser!.visitedCountries)..add(countryCode);
-    final newPlanned = Set<String>.from(_currentUser!.plannedCountries)..remove(countryCode);
+    final newVisited = Set<String>.from(_currentUser!.visitedCountries)..add(code);
+    final newPlanned = Set<String>.from(_currentUser!.plannedCountries)..remove(code);
     _currentUser = _currentUser!.copyWith(visitedCountries: newVisited, plannedCountries: newPlanned);
     // update stored account
     for (int i = 0; i < _accounts.length; i++) {
@@ -156,9 +157,10 @@ class SessionManager {
   /// Toggle visited state for the current user. Returns true if now visited.
   bool toggleVisitedForCurrentUser(String countryCode) {
     if (_currentUser == null) return false;
+    final code = countryCode.toUpperCase();
     final currentSet = Set<String>.from(_currentUser!.visitedCountries);
-    if (currentSet.contains(countryCode)) {
-      currentSet.remove(countryCode);
+    if (currentSet.contains(code)) {
+      currentSet.remove(code);
       _currentUser = _currentUser!.copyWith(visitedCountries: currentSet);
       for (int i = 0; i < _accounts.length; i++) {
         if (_accounts[i].email == _currentUser!.email) {
@@ -170,9 +172,9 @@ class SessionManager {
       plannedCountNotifier.value = _currentUser!.plannedCountries.length;
       return false;
     } else {
-      currentSet.add(countryCode);
+      currentSet.add(code);
       // When marking visited, remove from planned if present
-      final newPlanned = Set<String>.from(_currentUser!.plannedCountries)..remove(countryCode);
+      final newPlanned = Set<String>.from(_currentUser!.plannedCountries)..remove(code);
       _currentUser = _currentUser!.copyWith(visitedCountries: currentSet, plannedCountries: newPlanned);
       for (int i = 0; i < _accounts.length; i++) {
         if (_accounts[i].email == _currentUser!.email) {
@@ -189,9 +191,10 @@ class SessionManager {
   /// Toggle planned (future trip) state for the current user. Returns true if now planned.
   bool togglePlannedForCurrentUser(String countryCode) {
     if (_currentUser == null) return false;
+    final code = countryCode.toUpperCase();
     final currentSet = Set<String>.from(_currentUser!.plannedCountries);
-    if (currentSet.contains(countryCode)) {
-      currentSet.remove(countryCode);
+    if (currentSet.contains(code)) {
+      currentSet.remove(code);
       _currentUser = _currentUser!.copyWith(plannedCountries: currentSet);
       for (int i = 0; i < _accounts.length; i++) {
         if (_accounts[i].email == _currentUser!.email) {
@@ -203,8 +206,8 @@ class SessionManager {
       return false;
     } else {
       // Do not add to planned if already visited
-      if (_currentUser!.visitedCountries.contains(countryCode)) return false;
-      currentSet.add(countryCode);
+      if (_currentUser!.visitedCountries.contains(code)) return false;
+      currentSet.add(code);
       _currentUser = _currentUser!.copyWith(plannedCountries: currentSet);
       for (int i = 0; i < _accounts.length; i++) {
         if (_accounts[i].email == _currentUser!.email) {
@@ -219,12 +222,14 @@ class SessionManager {
 
   bool isCountryVisitedForCurrentUser(String countryCode) {
     if (_currentUser == null) return false;
-    return _currentUser!.visitedCountries.contains(countryCode);
+    final code = countryCode.toUpperCase();
+    return _currentUser!.visitedCountries.contains(code);
   }
 
   bool isCountryPlannedForCurrentUser(String countryCode) {
     if (_currentUser == null) return false;
-    return _currentUser!.plannedCountries.contains(countryCode);
+    final code = countryCode.toUpperCase();
+    return _currentUser!.plannedCountries.contains(code);
   }
 
   int getVisitedCountForCurrentUser() => _currentUser?.visitedCountries.length ?? 0;

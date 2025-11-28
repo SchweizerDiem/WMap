@@ -14,6 +14,7 @@ import './pages/friends.dart';
 import './pages/hub.dart';
 
 import 'session_manager.dart';
+import 'country_names.dart';
 
 // Garante que os códigos seguem o formato do mapa: iso2 lowercase
 String normalizeCountryCode(String code) {
@@ -478,11 +479,13 @@ class _HomePageState extends State<HomePage> {
                                     
                                     // Visitados em verde (sobrepõe laranja)
                                     for (var code in visited) {
-                                      colorMap[code] = const Color.fromARGB(255, 31, 131, 212);
+                                      final c2 = normalizeCountryCode(code);
+                                      colorMap[c2] = const Color.fromARGB(255, 31, 131, 212);
                                     }
                                     // Planeados em azul (não sobrepõe visitado ou nacionalidade)
                                     for (var code in planned) {
-                                      colorMap.putIfAbsent(code, () => const Color.fromARGB(255, 6, 16, 148));
+                                      final c2 = normalizeCountryCode(code);
+                                      colorMap.putIfAbsent(c2, () => const Color.fromARGB(255, 6, 16, 148));
                                     }
                                     return SimpleMap(
                                       instructions: SMapWorld.instructions,
@@ -543,18 +546,18 @@ class _HomePageState extends State<HomePage> {
       builder: (BuildContext context) {
         final session = SessionManager();
         return StatefulBuilder(builder: (context, setState) {
-          var isVisited = session.isCountryVisitedForCurrentUser(countryCode);
-          var isPlanned = SessionManager().isCountryPlannedForCurrentUser(countryCode);
+          final isVisited = session.isCountryVisitedForCurrentUser(countryCode);
+          final isPlanned = SessionManager().isCountryPlannedForCurrentUser(countryCode);
+          // Check whether this country was selected as the user's nationality (normalize to uppercase for safety)
+          final isNationality = _nationalityCountries.map((e) => e.toUpperCase()).contains(countryCode.toUpperCase());
 
           return Dialog(
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(16),
             ),
-            // O Dialog agora contém um Stack para sobrepor o ícone de fechar
             child: Stack(
-              clipBehavior: Clip.none, // Permite que o botão se estenda para fora do padding, se necessário
+              clipBehavior: Clip.none,
               children: [
-                // 1. Conteúdo Principal do Diálogo
                 Padding(
                   padding: const EdgeInsets.all(20.0),
                   child: Column(
@@ -575,54 +578,61 @@ class _HomePageState extends State<HomePage> {
                         textAlign: TextAlign.center,
                       ),
                       const SizedBox(height: 20),
-                      
-                      // 2. Row apenas com os botões "Visited" e "Future Trip"
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                        children: [
-                          // Botão 'Visited'
-                          Expanded(
-                            child: ElevatedButton(
-                              onPressed: () {
-                                session.toggleVisitedForCurrentUser(countryCode);
-                                isVisited = session.isCountryVisitedForCurrentUser(countryCode);
-                                isPlanned = SessionManager().isCountryPlannedForCurrentUser(countryCode);
-                                setState(() {});
-                                Future.delayed(const Duration(milliseconds: 300), () {
-                                  if (context.mounted) Navigator.of(context).pop();
-                                });
-                              },
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: isVisited ? const Color.fromARGB(255, 31, 131, 212): null,
-                                foregroundColor: isVisited ? Colors.white : null,
-                                padding: const EdgeInsets.symmetric(horizontal: 4), 
-                              ),
-                              child: Text(isVisited ? 'Visited ✓' : 'Visited'),
-                            ),
+
+                      // If the user indicated this country as their nationality, display a friendly message instead
+                      if (isNationality) ...[
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 8.0),
+                          child: Text(
+                            'Oh it seems like you are from this country',
+                            textAlign: TextAlign.center,
                           ),
-                          const SizedBox(width: 8), 
-                          // Botão 'Future Trip'
-                          Expanded(
-                            child: ElevatedButton(
-                              onPressed: () {
-                                session.togglePlannedForCurrentUser(countryCode);
-                                isVisited = session.isCountryVisitedForCurrentUser(countryCode);
-                                isPlanned = SessionManager().isCountryPlannedForCurrentUser(countryCode);
-                                setState(() {});
-                                Future.delayed(const Duration(milliseconds: 300), () {
-                                  if (context.mounted) Navigator.of(context).pop();
-                                });
-                              },
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: isPlanned ? const Color.fromARGB(255, 6, 16, 148) : null,
-                                foregroundColor: isPlanned ? Colors.white : null,
-                                padding: const EdgeInsets.symmetric(horizontal: 4), 
+                        ),
+                      ] else ...[
+                        // 2. Row apenas com os botões "Visited" e "Future Trip"
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                          children: [
+                            // Botão 'Visited'
+                            Expanded(
+                              child: ElevatedButton(
+                                onPressed: () {
+                                  session.toggleVisitedForCurrentUser(countryCode);
+                                  setState(() {});
+                                  Future.delayed(const Duration(milliseconds: 300), () {
+                                    if (context.mounted) Navigator.of(context).pop();
+                                  });
+                                },
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: isVisited ? const Color.fromARGB(255, 31, 131, 212): null,
+                                  foregroundColor: isVisited ? Colors.white : null,
+                                  padding: const EdgeInsets.symmetric(horizontal: 4), 
+                                ),
+                                child: Text(isVisited ? 'Visited ✓' : 'Visited'),
                               ),
-                              child: Text(isPlanned ? 'Future Trip ✓' : 'Future Trip'),
                             ),
-                          ),
-                        ],
-                      ),
+                            const SizedBox(width: 8), 
+                            // Botão 'Future Trip'
+                            Expanded(
+                              child: ElevatedButton(
+                                onPressed: () {
+                                  session.togglePlannedForCurrentUser(countryCode);
+                                  setState(() {});
+                                  Future.delayed(const Duration(milliseconds: 300), () {
+                                    if (context.mounted) Navigator.of(context).pop();
+                                  });
+                                },
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: isPlanned ? const Color.fromARGB(255, 6, 16, 148) : null,
+                                  foregroundColor: isPlanned ? Colors.white : null,
+                                  padding: const EdgeInsets.symmetric(horizontal: 4), 
+                                ),
+                                child: Text(isPlanned ? 'Future Trip ✓' : 'Future Trip'),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -634,63 +644,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  final Map<String, String> countryNames = {
-    'AF': 'Afghanistan', 'AL': 'Albania', 'DZ': 'Algeria', 'AD': 'Andorra',
-    'AO': 'Angola', 'AG': 'Antigua and Barbuda', 'AR': 'Argentina', 'AM': 'Armenia',
-    'AU': 'Australia', 'AT': 'Austria', 'AZ': 'Azerbaijan', 'BS': 'Bahamas',
-    'BH': 'Bahrain', 'BD': 'Bangladesh', 'BB': 'Barbados', 'BY': 'Belarus',
-    'BE': 'Belgium', 'BZ': 'Belize', 'BJ': 'Benin', 'BT': 'Bhutan',
-    'BO': 'Bolivia', 'BA': 'Bosnia and Herzegovina', 'BW': 'Botswana', 'BR': 'Brazil',
-    'BN': 'Brunei', 'BG': 'Bulgaria', 'BF': 'Burkina Faso', 'BI': 'Burundi',
-    'KH': 'Cambodia', 'CM': 'Cameroon', 'CA': 'Canada', 'CV': 'Cape Verde',
-    'CF': 'Central African Republic', 'TD': 'Chad', 'CL': 'Chile', 'CN': 'China',
-    'CO': 'Colombia', 'KM': 'Comoros', 'CG': 'Congo', 'CR': 'Costa Rica',
-    'HR': 'Croatia', 'CU': 'Cuba', 'CY': 'Cyprus', 'CZ': 'Czech Republic',
-    'CD': 'Democratic Republic of the Congo', 'DK': 'Denmark', 'DJ': 'Djibouti',
-    'DM': 'Dominica', 'DO': 'Dominican Republic', 'EC': 'Ecuador', 'EG': 'Egypt',
-    'SV': 'El Salvador', 'GQ': 'Equatorial Guinea', 'ER': 'Eritrea', 'EE': 'Estonia',
-    'ET': 'Ethiopia', 'FJ': 'Fiji', 'FI': 'Finland', 'FR': 'France',
-    'GA': 'Gabon', 'GM': 'Gambia', 'GE': 'Georgia', 'DE': 'Germany',
-    'GH': 'Ghana', 'GR': 'Greece', 'GD': 'Grenada', 'GT': 'Guatemala',
-    'GN': 'Guinea', 'GW': 'Guinea-Bissau', 'GY': 'Guyana', 'HT': 'Haiti',
-    'HN': 'Honduras', 'HU': 'Hungary', 'IS': 'Iceland', 'IN': 'India',
-    'ID': 'Indonesia', 'IR': 'Iran', 'IQ': 'Iraq', 'IE': 'Ireland',
-    'IM': 'Isle of Man', 'IL': 'Israel', 'IT': 'Italy', 'CI': 'Ivory Coast',
-    'JM': 'Jamaica', 'JP': 'Japan', 'JO': 'Jordan', 'KZ': 'Kazakhstan',
-    'KE': 'Kenya', 'KI': 'Kiribati', 'KP': 'North Korea', 'KR': 'South Korea',
-    'KW': 'Kuwait', 'KG': 'Kyrgyzstan', 'LA': 'Laos', 'LV': 'Latvia',
-    'LB': 'Lebanon', 'LS': 'Lesotho', 'LR': 'Liberia', 'LY': 'Libya',
-    'LI': 'Liechtenstein', 'LT': 'Lithuania', 'LU': 'Luxembourg', 'MG': 'Madagascar',
-    'MW': 'Malawi', 'MY': 'Malaysia', 'MV': 'Maldives', 'ML': 'Mali',
-    'MT': 'Malta', 'MH': 'Marshall Islands', 'MR': 'Mauritania', 'MU': 'Mauritius',
-    'MX': 'Mexico', 'FM': 'Micronesia', 'MD': 'Moldova', 'MC': 'Monaco',
-    'MN': 'Mongolia', 'ME': 'Montenegro', 'MA': 'Morocco', 'MZ': 'Mozambique',
-    'MM': 'Myanmar', 'NA': 'Namibia', 'NR': 'Nauru', 'NP': 'Nepal',
-    'NL': 'Netherlands', 'NZ': 'New Zealand', 'NI': 'Nicaragua', 'NE': 'Niger',
-    'NG': 'Nigeria', 'NO': 'Norway', 'OM': 'Oman', 'PK': 'Pakistan',
-    'PW': 'Palau', 'PS': 'Palestine', 'PA': 'Panama', 'PG': 'Papua New Guinea',
-    'PY': 'Paraguay', 'PE': 'Peru', 'PH': 'Philippines', 'PL': 'Poland',
-    'PT': 'Portugal', 'QA': 'Qatar', 'RO': 'Romania', 'RU': 'Russia',
-    'RW': 'Rwanda', 'KN': 'Saint Kitts and Nevis', 'LC': 'Saint Lucia',
-    'VC': 'Saint Vincent and the Grenadines', 'WS': 'Samoa', 'SM': 'San Marino',
-    'ST': 'São Tomé and Príncipe', 'SA': 'Saudi Arabia', 'SN': 'Senegal',
-    'RS': 'Serbia', 'SC': 'Seychelles', 'SL': 'Sierra Leone', 'SG': 'Singapore',
-    'SK': 'Slovakia', 'SI': 'Slovenia', 'SB': 'Solomon Islands', 'SO': 'Somalia',
-    'ZA': 'South Africa', 'SS': 'South Sudan', 'ES': 'Spain', 'LK': 'Sri Lanka',
-    'SD': 'Sudan', 'SR': 'Suriname', 'SZ': 'Eswatini', 'SE': 'Sweden',
-    'CH': 'Switzerland', 'SY': 'Syria', 'TW': 'Taiwan', 'TJ': 'Tajikistan',
-    'TZ': 'Tanzania', 'TH': 'Thailand', 'TL': 'Timor-Leste', 'TG': 'Togo',
-    'TO': 'Tonga', 'TT': 'Trinidad and Tobago', 'TN': 'Tunisia', 'TR': 'Turkey',
-    'TM': 'Turkmenistan', 'TV': 'Tuvalu', 'UG': 'Uganda', 'UA': 'Ukraine',
-    'AE': 'United Arab Emirates', 'GB': 'United Kingdom', 'US': 'United States',
-    'UY': 'Uruguay', 'UZ': 'Uzbekistan', 'VU': 'Vanuatu', 'VA': 'Vatican City',
-    'VE': 'Venezuela', 'VN': 'Vietnam', 'YE': 'Yemen', 'ZM': 'Zambia',
-    'ZW': 'Zimbabwe',
-  };
-
-  String getCountryName(String countryCode) {
-    return countryNames[countryCode] ?? countryCode;
-  }
+  // countryNames and getCountryName are provided by lib/country_names.dart
 
   Widget _buildSearchResults() {
     final query = _searchController.text.toLowerCase();

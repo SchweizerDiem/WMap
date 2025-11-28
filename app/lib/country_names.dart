@@ -53,4 +53,8 @@ const Map<String, String> countryNames = {
   'ZW': 'Zimbabwe',
 };
 
-String getCountryName(String code) => countryNames[code] ?? code;
+String getCountryName(String code) {
+  if (code.isEmpty) return code;
+  final key = code.toUpperCase();
+  return countryNames[key] ?? code;
+}
