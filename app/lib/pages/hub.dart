@@ -39,6 +39,7 @@ class _HubPageState extends State<HubPage> {
           );
         },
       );
+      if (!mounted) return;
 
       if (createFolder == true) {
         // Ask for folder name
@@ -59,12 +60,14 @@ class _HubPageState extends State<HubPage> {
             );
           },
         );
+        if (!mounted) return;
         if (folderName == null || folderName.isEmpty) {
           // user cancelled or provided empty name -> abort
           return;
         }
 
         final List<XFile>? picked = await _imagePicker.pickMultiImage();
+        if (!mounted) return;
         if (picked != null && picked.isNotEmpty) {
           final files = picked.map((x) => File(x.path)).toList();
           _photoManager.addPhotosToFolder(countryCode, folderName, files);
@@ -76,7 +79,8 @@ class _HubPageState extends State<HubPage> {
         }
       } else {
         // No folder: behave as before
-  final List<XFile>? picked = await _imagePicker.pickMultiImage();
+        final List<XFile>? picked = await _imagePicker.pickMultiImage();
+        if (!mounted) return;
         if (picked != null && picked.isNotEmpty) {
           final files = picked.map((x) => File(x.path)).toList();
           _photoManager.addPhotos(countryCode, files);
@@ -292,6 +296,7 @@ class _HubPageState extends State<HubPage> {
                               builder: (context, photos, child) {
                                 if (photos.isEmpty) return const SizedBox.shrink();
                                 return ExpansionTile(
+                                  leading: const Icon(Icons.folder, color: Colors.orange),
                                   title: Text('$folder — ${photos.length} photo(s)'),
                                   childrenPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                   children: [
@@ -397,11 +402,10 @@ class _HubPageState extends State<HubPage> {
                           ValueListenableBuilder<List<File>>(
                             valueListenable: notifier,
                             builder: (context, photos, child) {
+                              // Only show "No photos" message if there are no root photos
+                              // If folders exist with photos, they will be shown above
                               if (photos.isEmpty) {
-                                return const Padding(
-                                  padding: EdgeInsets.symmetric(vertical: 8.0),
-                                  child: Text('No photos for this country.'),
-                                );
+                                return const SizedBox.shrink();
                               }
 
                               return ExpansionTile(
