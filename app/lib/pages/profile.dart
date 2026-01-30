@@ -23,6 +23,7 @@ class _ProfilePageState extends State<ProfilePage> {
   void initState() {
     super.initState();
     _profileManager = ProfileManager();
+    _profileManager.loadProfileImage();
   }
 
   Future<void> _pickImageFromGallery() async {
@@ -187,33 +188,36 @@ class _ProfilePageState extends State<ProfilePage> {
                             const SizedBox(height: 8),
                             // Dropdown / expansion to show visited country list
                             ExpansionTile(
-                              title: const Text('Show visited countries'),
-                              children: [
-                                Builder(builder: (context) {
-                                  final codes = SessionManager().getVisitedCountriesForCurrentUser();
-                                  if (codes.isEmpty) {
-                                    return const Padding(
-                                      padding: EdgeInsets.all(12.0),
-                                      child: Text('No countries visited yet.'),
-                                    );
-                                  }
-                                  return Column(
-                                    children: codes.toList().map((code) {
-                                      final name = getCountryName(code);
-                                      return ListTile(
-                                        leading: SizedBox(
-                                          width: 40,
-                                          height: 24,
-                                          child: country_flags.CountryFlag.fromCountryCode(code),
-                                        ),
-                                        title: Text(name),
-                                        subtitle: Text(code.toUpperCase()),
-                                      );
-                                    }).toList(),
+                            title: const Text('Show visited countries'),
+                            children: [
+                              Builder(builder: (context) {
+                                // CORREÇÃO AQUI: Aceder ao Set via currentUser
+                                final user = SessionManager().getCurrentUser();
+                                final codes = user?.visitedCountries ?? {};
+                                
+                                if (codes.isEmpty) {
+                                  return const Padding(
+                                    padding: EdgeInsets.all(12.0),
+                                    child: Text('No countries visited yet.'),
                                   );
-                                }),
-                              ],
-                            ),
+                                }
+                                return Column(
+                                  children: codes.map((code) {
+                                    final name = getCountryName(code);
+                                    return ListTile(
+                                      leading: SizedBox(
+                                        width: 40,
+                                        height: 24,
+                                        child: country_flags.CountryFlag.fromCountryCode(code),
+                                      ),
+                                      title: Text(name),
+                                      subtitle: Text(code.toUpperCase()),
+                                    );
+                                  }).toList(),
+                                );
+                              }),
+                            ],
+                          ),
                           ],
                         ),
                       ),
@@ -313,7 +317,10 @@ class _ProfilePageState extends State<ProfilePage> {
                           title: const Text('Show planned countries'),
                           children: [
                             Builder(builder: (context) {
-                              final codes = SessionManager().getPlannedCountriesForCurrentUser();
+                              // CORREÇÃO AQUI: Aceder ao Set planeado via currentUser
+                              final user = SessionManager().getCurrentUser();
+                              final codes = user?.plannedCountries ?? {};
+                              
                               if (codes.isEmpty) {
                                 return const Padding(
                                   padding: EdgeInsets.all(12.0),
@@ -321,7 +328,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                 );
                               }
                               return Column(
-                                children: codes.toList().map((code) {
+                                children: codes.map((code) {
                                   final name = getCountryName(code);
                                   return ListTile(
                                     leading: SizedBox(

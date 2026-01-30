@@ -15,7 +15,7 @@ const Map<String, String> countryNames = {
   'DM': 'Dominica', 'DO': 'Dominican Republic', 'EC': 'Ecuador', 'EG': 'Egypt',
   'SV': 'El Salvador', 'GQ': 'Equatorial Guinea', 'ER': 'Eritrea', 'EE': 'Estonia',
   'ET': 'Ethiopia', 'FJ': 'Fiji', 'FI': 'Finland', 'FR': 'France',
-  'GA': 'Gabon', 'GM': 'Gambia', 'GE': 'Georgia', 'DE': 'Germany',
+  'GA': 'Gabon', 'GL':'Greenland','GM': 'Gambia', 'GE': 'Georgia', 'DE': 'Germany',
   'GH': 'Ghana', 'GR': 'Greece', 'GD': 'Grenada', 'GT': 'Guatemala',
   'GN': 'Guinea', 'GW': 'Guinea-Bissau', 'GY': 'Guyana', 'HT': 'Haiti',
   'HN': 'Honduras', 'HU': 'Hungary', 'IS': 'Iceland', 'IN': 'India',
@@ -50,7 +50,7 @@ const Map<String, String> countryNames = {
   'AE': 'United Arab Emirates', 'GB': 'United Kingdom', 'US': 'United States',
   'UY': 'Uruguay', 'UZ': 'Uzbekistan', 'VU': 'Vanuatu', 'VA': 'Vatican City',
   'VE': 'Venezuela', 'VN': 'Vietnam', 'YE': 'Yemen', 'ZM': 'Zambia',
-  'ZW': 'Zimbabwe',
+  'ZW': 'Zimbabwe', 'XK':'Kosovo',
 };
 
 String getCountryName(String code) {

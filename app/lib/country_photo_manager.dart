@@ -1,136 +1,143 @@
 import 'dart:io';
-
 import 'package:flutter/foundation.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:path/path.dart' as p;
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
-/// Simple in-memory manager for photos attached to country codes.
-/// Stores photos as local Files (paths returned by image_picker).
 class CountryPhotoManager {
   static final CountryPhotoManager _instance = CountryPhotoManager._internal();
-
   factory CountryPhotoManager() => _instance;
-
   CountryPhotoManager._internal();
 
-  // Map countryCode -> ValueNotifier of list of Files (root/unfoldered photos)
+  final FirebaseFirestore _db = FirebaseFirestore.instance;
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+
   final Map<String, ValueNotifier<List<File>>> _notifiers = {};
-  // Map countryCode -> (folderName -> ValueNotifier of list of Files)
   final Map<String, Map<String, ValueNotifier<List<File>>>> _folderNotifiers = {};
-  // Map countryCode -> ValueNotifier of folder name list to allow UI to react to folder additions/removals
   final Map<String, ValueNotifier<List<String>>> _folderListNotifiers = {};
-  // Optional per-country textual notes (user-added). Use ValueNotifier to allow UI to listen.
   final Map<String, ValueNotifier<String?>> _notes = {};
 
-  ValueNotifier<List<File>> _ensureNotifier(String countryCode) {
-    return _notifiers.putIfAbsent(countryCode, () => ValueNotifier<List<File>>(<File>[]));
-  }
+  // Garantir que temos um UID válido antes de qualquer operação
+  String? get _uid => _auth.currentUser?.uid;
 
-  Map<String, ValueNotifier<List<File>>> _ensureFolderMap(String countryCode) {
-    return _folderNotifiers.putIfAbsent(countryCode, () => <String, ValueNotifier<List<File>>>{});
-  }
+  // --- Notifiers ---
+  ValueNotifier<List<File>> _ensureNotifier(String countryCode) =>
+      _notifiers.putIfAbsent(countryCode, () => ValueNotifier<List<File>>([]));
 
   ValueNotifier<List<File>> _ensureFolderNotifier(String countryCode, String folderName) {
-    final map = _ensureFolderMap(countryCode);
-    return map.putIfAbsent(folderName, () => ValueNotifier<List<File>>(<File>[]));
+    final map = _folderNotifiers.putIfAbsent(countryCode, () => {});
+    return map.putIfAbsent(folderName, () => ValueNotifier<List<File>>([]));
   }
 
-  ValueNotifier<List<String>> _ensureFolderListNotifier(String countryCode) {
-    return _folderListNotifiers.putIfAbsent(countryCode, () => ValueNotifier<List<String>>(<String>[]));
-  }
+  ValueNotifier<List<String>> _ensureFolderListNotifier(String countryCode) =>
+      _folderListNotifiers.putIfAbsent(countryCode, () => ValueNotifier<List<String>>([]));
 
-  ValueNotifier<String?> _ensureNoteNotifier(String countryCode) {
-    return _notes.putIfAbsent(countryCode, () => ValueNotifier<String?>(null));
-  }
+  ValueNotifier<String?> _ensureNoteNotifier(String countryCode) =>
+      _notes.putIfAbsent(countryCode, () => ValueNotifier<String?>(null));
 
-  /// Get current photos for a country (snapshot)
-  List<File> getPhotos(String countryCode) => List.unmodifiable(_ensureNotifier(countryCode).value);
+  // --- Lógica Principal ---
 
-  /// Get a ValueNotifier to listen to changes for a specific country
-  ValueNotifier<List<File>> getNotifierForCountry(String countryCode) => _ensureNotifier(countryCode);
+  Future<void> loadCountryData(String countryCode) async {
+    if (_uid == null) return;
 
-  /// Get a ValueNotifier for a specific folder under a country
-  ValueNotifier<List<File>> getFolderNotifier(String countryCode, String folderName) => _ensureFolderNotifier(countryCode, folderName);
+    try {
+      final doc = await _db.collection('users').doc(_uid).collection('countries').doc(countryCode).get();
+      if (!doc.exists) return;
 
-  /// Get a ValueNotifier that emits the list of folder names for a country.
-  ValueNotifier<List<String>> getFolderListNotifier(String countryCode) => _ensureFolderListNotifier(countryCode);
+      final data = doc.data()!;
 
-  /// Add one or more photos for a country
-  void addPhotos(String countryCode, List<File> files) {
-    final notifier = _ensureNotifier(countryCode);
-    final newList = List<File>.from(notifier.value)..addAll(files);
-    notifier.value = newList;
-  }
+      // 1. Nota
+      _ensureNoteNotifier(countryCode).value = data['note'];
 
-  /// Add photos to a named folder for a country. Creates the folder if missing.
-  void addPhotosToFolder(String countryCode, String folderName, List<File> files) {
-    final notifier = _ensureFolderNotifier(countryCode, folderName);
-    final newList = List<File>.from(notifier.value)..addAll(files);
-    notifier.value = newList;
-    // ensure folder appears in folder list
-    final listNotifier = _ensureFolderListNotifier(countryCode);
-    if (!listNotifier.value.contains(folderName)) {
-      final newListNames = List<String>.from(listNotifier.value)..add(folderName);
-      listNotifier.value = newListNames;
+      // 2. Fotos Raiz
+      final List<dynamic> rootPaths = data['rootPhotos'] ?? [];
+      _ensureNotifier(countryCode).value = rootPaths.map((path) => File(path)).toList();
+
+      // 3. Pastas
+      final Map<String, dynamic> foldersData = data['folders'] ?? {};
+      final folderNames = foldersData.keys.toList();
+      
+      foldersData.forEach((folderName, photos) {
+        final List<dynamic> photoPaths = photos ?? [];
+        _ensureFolderNotifier(countryCode, folderName).value = 
+            photoPaths.map((path) => File(path)).toList();
+      });
+      
+      _ensureFolderListNotifier(countryCode).value = folderNames;
+    } catch (e) {
+      debugPrint("Erro ao carregar dados do país $countryCode: $e");
     }
   }
 
-  /// Clear photos for a country
-  void clearPhotos(String countryCode) {
-    final notifier = _ensureNotifier(countryCode);
-    notifier.value = <File>[];
-  }
+  Future<void> addPhotos(String countryCode, List<File> files, {String? folderName}) async {
+    if (_uid == null) return;
 
-  /// Clear photos in a named folder for a country
-  void clearFolder(String countryCode, String folderName) {
-    final notifier = _ensureFolderNotifier(countryCode, folderName);
-    notifier.value = <File>[];
-  }
+    final directory = await getApplicationDocumentsDirectory();
+    final List<String> newPaths = [];
 
-  /// Remove a folder entirely (delete folder entry and its notifier)
-  void removeFolder(String countryCode, String folderName) {
-    final map = _folderNotifiers[countryCode];
-    map?.remove(folderName);
-    final listNotifier = _folderListNotifiers[countryCode];
-    if (listNotifier != null && listNotifier.value.contains(folderName)) {
-      final newList = List<String>.from(listNotifier.value)..remove(folderName);
-      listNotifier.value = newList;
+    for (var file in files) {
+      final String extension = p.extension(file.path);
+      final String name = "${countryCode}_${DateTime.now().microsecondsSinceEpoch}$extension";
+      final String permanentPath = p.join(directory.path, name);
+      
+      await file.copy(permanentPath);
+      newPaths.add(permanentPath);
     }
+
+    final docRef = _db.collection('users').doc(_uid).collection('countries').doc(countryCode);
+
+    if (folderName == null || folderName.isEmpty) {
+      await docRef.set({'rootPhotos': FieldValue.arrayUnion(newPaths)}, SetOptions(merge: true));
+    } else {
+      await docRef.set({
+        'folders': { folderName: FieldValue.arrayUnion(newPaths) }
+      }, SetOptions(merge: true));
+    }
+
+    await loadCountryData(countryCode);
   }
 
-  /// Get the current note for a country (snapshot)
-  String? getNote(String countryCode) => _ensureNoteNotifier(countryCode).value;
-
-  /// Get a ValueNotifier to listen to the textual note for a specific country
-  ValueNotifier<String?> getNoteNotifier(String countryCode) => _ensureNoteNotifier(countryCode);
-
-  /// Set or clear a textual note for a country. Pass null or empty string to clear.
-  void setNote(String countryCode, String? note) {
-    final notifier = _ensureNoteNotifier(countryCode);
-    notifier.value = (note != null && note.isEmpty) ? null : note;
+  Future<void> setNote(String countryCode, String? note) async {
+    if (_uid == null) return;
+    final cleanNote = (note != null && note.trim().isEmpty) ? null : note;
+    
+    await _db.collection('users').doc(_uid).collection('countries').doc(countryCode).set({
+      'note': cleanNote
+    }, SetOptions(merge: true));
+    
+    _ensureNoteNotifier(countryCode).value = cleanNote;
   }
 
-  /// Remove specific photos for a country. Files are matched by path.
-  void removePhotos(String countryCode, List<File> filesToRemove) {
-    final notifier = _ensureNotifier(countryCode);
-    final pathsToRemove = filesToRemove.map((f) => f.path).toSet();
-    final newList = notifier.value.where((f) => !pathsToRemove.contains(f.path)).toList();
-    notifier.value = newList;
+  Future<void> removePhotos(String countryCode, List<File> filesToRemove, {String? folderName}) async {
+    if (_uid == null) return;
+
+    final pathsToRemove = filesToRemove.map((f) => f.path).toList();
+    final docRef = _db.collection('users').doc(_uid).collection('countries').doc(countryCode);
+
+    if (folderName == null || folderName.isEmpty) {
+      await docRef.update({'rootPhotos': FieldValue.arrayRemove(pathsToRemove)});
+    } else {
+      await docRef.set({
+        'folders': { folderName: FieldValue.arrayRemove(pathsToRemove) }
+      }, SetOptions(merge: true));
+    }
+    
+    // Limpeza de ficheiros locais
+    for (var f in filesToRemove) {
+      try { if (await f.exists()) await f.delete(); } catch (_) {}
+    }
+
+    await loadCountryData(countryCode);
   }
 
-  /// Remove specific photos from a named folder for a country. Files are matched by path.
-  void removePhotosFromFolder(String countryCode, String folderName, List<File> filesToRemove) {
-    final notifier = _ensureFolderNotifier(countryCode, folderName);
-    final pathsToRemove = filesToRemove.map((f) => f.path).toSet();
-    final newList = notifier.value.where((f) => !pathsToRemove.contains(f.path)).toList();
-    notifier.value = newList;
-  }
-
-  /// Get list of folder names for a country
-  List<String> getFolders(String countryCode) {
-    final map = _folderNotifiers[countryCode];
-    if (map == null) return <String>[];
-    return map.keys.toList();
-  }
-
-  /// Get photos in a folder (snapshot)
-  List<File> getPhotosInFolder(String countryCode, String folderName) => List.unmodifiable(_ensureFolderNotifier(countryCode, folderName).value);
+  // --- Getters ---
+  ValueNotifier<List<File>> getNotifierForCountry(String code) => _ensureNotifier(code);
+  ValueNotifier<List<File>> getFolderNotifier(String code, String folder) => _ensureFolderNotifier(code, folder);
+  ValueNotifier<List<String>> getFolderListNotifier(String code) => _ensureFolderListNotifier(code);
+  ValueNotifier<String?> getNoteNotifier(String code) => _ensureNoteNotifier(code);
+  
+  String? getNote(String code) => _ensureNoteNotifier(code).value;
+  List<File> getPhotos(String code) => _ensureNotifier(code).value;
+  List<File> getPhotosInFolder(String code, String folder) => _ensureFolderNotifier(code, folder).value;
 }

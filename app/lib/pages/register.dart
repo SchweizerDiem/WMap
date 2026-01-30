@@ -18,6 +18,7 @@ class _RegisterPageState extends State<RegisterPage> {
   // ValueNotifier to track password changes in real-time
   late final ValueNotifier<String> _passwordNotifier;
 
+  bool _isLoading = false;
   String? errorMessage;
 
   @override
@@ -47,69 +48,62 @@ class _RegisterPageState extends State<RegisterPage> {
     return true;
   }
 
-  void _register() {
+  Future<void> _register() async { // MUDADO: Agora é Future/async
     final name = _nameController.text.trim();
     final email = _emailController.text.trim();
     final password = _passwordController.text;
     final confirm = _confirmController.text;
 
     if (name.isEmpty || email.isEmpty || password.isEmpty || confirm.isEmpty) {
-      setState(() {
-        errorMessage = 'Please fill in all fields';
-      });
+      setState(() => errorMessage = 'Please fill in all fields');
       return;
     }
 
     if (!_isValidEmail(email)) {
-      setState(() {
-        errorMessage = 'Invalid email format. Email must contain @ and a domain (e.g., .com)';
-      });
+      setState(() => errorMessage = 'Invalid email format.');
       return;
     }
 
     if (!_isValidPassword(password)) {
-      setState(() {
-        errorMessage = 'Password must have at least 12 characters, uppercase, lowercase, numbers, and special characters';
-      });
+      setState(() => errorMessage = 'Password does not meet requirements');
       return;
     }
 
     if (password != confirm) {
-      setState(() {
-        errorMessage = 'Passwords do not match';
-      });
+      setState(() => errorMessage = 'Passwords do not match');
       return;
     }
 
-    // Try to register the account in the session
-    final sessionManager = SessionManager();
-    // usamos o mesmo valor para name e username (Name/Username)
-    if (!sessionManager.registerAccount(name, name, email, password)) {
-      setState(() {
-        errorMessage = 'Email or username already registered';
-      });
-      return;
-    }
+    setState(() {
+      _isLoading = true;
+      errorMessage = null;
+    });
 
-    // Log the user in and navigate to home.
-    if (sessionManager.login(email, password)) {
-      final user = sessionManager.getCurrentUser();
-      if (user != null) {
-        userNameNotifier.value = user.name;
+    try {
+      final sessionManager = SessionManager();
+      
+      // MUDADO: Registo assíncrono no Firebase
+      bool success = await sessionManager.registerAccount(name, email, password);
+
+      if (success) {
+        // MUDADO: Login assíncrono automático
+        await sessionManager.login(email, password);
+        
+        if (mounted) {
+          final user = sessionManager.getCurrentUser();
+          if (user != null) {
+            userNameNotifier.value = user.name;
+          }
+          Navigator.pushReplacementNamed(context, '/home');
+        }
+      } else {
+        setState(() => errorMessage = 'Registration failed. Email might be in use.');
       }
-      Navigator.pushReplacementNamed(context, '/home');
-      return;
+    } catch (e) {
+      setState(() => errorMessage = 'Error: $e');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
-  }
-
-  @override
-  void dispose() {
-    _nameController.dispose();
-    _emailController.dispose();
-    _passwordController.dispose();
-    _confirmController.dispose();
-    _passwordNotifier.dispose();
-    super.dispose();
   }
 
   @override
@@ -211,21 +205,17 @@ class _RegisterPageState extends State<RegisterPage> {
                     width: double.infinity,
                     height: 48,
                     child: ElevatedButton(
-                      onPressed: _register,
+                      onPressed: _isLoading ? null : _register, // Desativado se estiver a carregar
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Color(0xff6c63ff),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
+                        backgroundColor: const Color(0xff6c63ff),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                       ),
-                      child: const Text(
-                        'Register',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
+                      child: _isLoading 
+                        ? const CircularProgressIndicator(color: Colors.white)
+                        : const Text(
+                            'Register',
+                            style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                          ),
                     ),
                   ),
                   const SizedBox(height: 12),

@@ -1,8 +1,10 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:countries_world_map/countries_world_map.dart';
 import 'package:countries_world_map/data/maps/world_map.dart';
 import 'package:country_flags/country_flags.dart' as country_flags;
+import 'package:firebase_core/firebase_core.dart';
 
 // Pages
 import './pages/welcome.dart';
@@ -21,7 +23,20 @@ String normalizeCountryCode(String code) {
   return code.toLowerCase();
 }
 
-void main() {
+void main() async{
+  WidgetsFlutterBinding.ensureInitialized();  
+  try{
+    await Firebase.initializeApp();
+    debugPrint("Firebase initialized successfully");
+  } catch(e){
+    debugPrint("Firebase already initialized: $e");
+  }
+
+  final user = FirebaseAuth.instance.currentUser;
+  if (user != null) {
+    await SessionManager().refreshUserData();
+  }
+
   runApp(const MyApp());
 }
 
@@ -341,7 +356,7 @@ class _HomePageState extends State<HomePage> {
                               )
                             : null,
                         border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
+                          borderRadius: BorderRadius.circular(20),
                         ),
                         contentPadding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
                       ),
@@ -487,7 +502,7 @@ class _HomePageState extends State<HomePage> {
                           )
                         : null,
                     border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius: BorderRadius.circular(20),
                     ),
                     contentPadding: const EdgeInsets.symmetric(horizontal: 12),
                   ),
@@ -508,34 +523,34 @@ class _HomePageState extends State<HomePage> {
                                 return ValueListenableBuilder<int>(
                                   valueListenable: SessionManager().plannedCountNotifier,
                                   builder: (context2, plannedCount, child2) {
-                                    final visited = SessionManager().getVisitedCountriesForCurrentUser();
-                                    final planned = SessionManager().getPlannedCountriesForCurrentUser();
+                                    final session = SessionManager();
+                                    // MUDANÇA AQUI: Garantir que as listas são extraídas corretamente do UserAccount
+                                    final visited = session.getCurrentUser()?.visitedCountries ?? {};
+                                    final planned = session.getCurrentUser()?.plannedCountries ?? {};
+                                    
                                     final Map<String, Color> colorMap = {};
                                     
                                     // Nacionalidades em azul claro
                                     for (var code in _nationalityCountries) {
-                                      final c2 = normalizeCountryCode(code);
-                                      colorMap[c2] = const Color.fromARGB(255, 9, 181, 233);
+                                      colorMap[normalizeCountryCode(code)] = const Color.fromARGB(255, 9, 181, 233);
                                     }
                                     
-                                    // Visitados em verde (sobrepõe laranja)
+                                    // Visitados em azul médio (sobrepõe nacionalidade)
                                     for (var code in visited) {
-                                      final c2 = normalizeCountryCode(code);
-                                      colorMap[c2] = const Color.fromARGB(255, 31, 131, 212);
+                                      colorMap[normalizeCountryCode(code)] = const Color.fromARGB(255, 31, 131, 212);
                                     }
-                                    // Planeados em azul (não sobrepõe visitado ou nacionalidade)
+                                    
+                                    // Planeados em azul escuro (apenas se não for visitado)
                                     for (var code in planned) {
                                       final c2 = normalizeCountryCode(code);
                                       colorMap.putIfAbsent(c2, () => const Color.fromARGB(255, 6, 16, 148));
                                     }
+
                                     return SimpleMap(
                                       instructions: SMapWorld.instructions,
                                       defaultColor: Colors.grey,
                                       colors: colorMap,
-                                      countryBorder: const CountryBorder(
-                                        color: Colors.black,
-                                        width: 0.4,
-                                      ),
+                                      countryBorder: const CountryBorder(color: Colors.black, width: 0.4),
                                       fit: BoxFit.contain,
                                       callback: (id, name, tapdetails) {
                                         _showCountryInfoDialog(context, id, getCountryName(id));
@@ -637,8 +652,8 @@ class _HomePageState extends State<HomePage> {
                             // Botão 'Visited'
                             Expanded(
                               child: ElevatedButton(
-                                onPressed: () {
-                                  session.toggleVisitedForCurrentUser(countryCode);
+                                onPressed: () async{
+                                  await session.toggleVisitedForCurrentUser(countryCode);
                                   setState(() {});
                                   Future.delayed(const Duration(milliseconds: 300), () {
                                     if (context.mounted) Navigator.of(context).pop();
@@ -656,8 +671,8 @@ class _HomePageState extends State<HomePage> {
                             // Botão 'Future Trip'
                             Expanded(
                               child: ElevatedButton(
-                                onPressed: () {
-                                  session.togglePlannedForCurrentUser(countryCode);
+                                onPressed: () async{
+                                  await session.togglePlannedForCurrentUser(countryCode);
                                   setState(() {});
                                   Future.delayed(const Duration(milliseconds: 300), () {
                                     if (context.mounted) Navigator.of(context).pop();

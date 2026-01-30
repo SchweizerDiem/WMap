@@ -1,20 +1,18 @@
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'user.dart';
 
-/// User account data model
+/// Modelo de dados da conta (simplificado para o Firebase)
 class UserAccount {
   final String name;
-  final String username;
   final String email;
-  final String password;
   final Set<String> visitedCountries;
   final Set<String> plannedCountries;
 
   UserAccount({
     required this.name,
-    required this.username,
     required this.email,
-    required this.password,
     Set<String>? visitedCountries,
     Set<String>? plannedCountries,
   }) : visitedCountries = visitedCountries ?? <String>{},
@@ -23,217 +21,150 @@ class UserAccount {
   UserAccount copyWith({String? name, Set<String>? visitedCountries, Set<String>? plannedCountries}) {
     return UserAccount(
       name: name ?? this.name,
-      username: username,
       email: email,
-      password: password,
       visitedCountries: visitedCountries ?? Set<String>.from(this.visitedCountries),
       plannedCountries: plannedCountries ?? Set<String>.from(this.plannedCountries),
     );
   }
-
-  @override
-  String toString() => 'UserAccount(name: $name, username: $username, email: $email)';
 }
 
-/// Singleton session manager to store user accounts in memory
 class SessionManager {
   static final SessionManager _instance = SessionManager._internal();
-
-  final List<UserAccount> _accounts = [];
-  UserAccount? _currentUser;
-  // Notifier for the current user's visited count so UI can listen
-  final ValueNotifier<int> visitedCountNotifier = ValueNotifier<int>(0);
-  // Notifier for the current user's planned (future trip) count
-  final ValueNotifier<int> plannedCountNotifier = ValueNotifier<int>(0);
-
+  factory SessionManager() => _instance;
   SessionManager._internal();
 
-  factory SessionManager() {
-    return _instance;
-  }
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+  final FirebaseFirestore _db = FirebaseFirestore.instance;
 
-  /// Register a new account and save it to the session
-  bool registerAccount(String name, String username, String email, String password) {
-    // Check if email or username already exists
-    if (_accounts.any((account) => account.email == email)) {
-      return false; // Email already registered
-    }
-    if (_accounts.any((account) => account.username == username)) {
-      return false; // Username already taken
-    }
+  UserAccount? _currentUser;
 
-    // Add new account
-    final newAccount = UserAccount(
-      name: name,
-      username: username,
-      email: email,
-      password: password,
-    );
-    _accounts.add(newAccount);
-    // Do not automatically set as current user here; login will set current user.
-    return true;
-  }
+  // Notifiers para a UI (Ecrã de Perfil/Home)
+  final ValueNotifier<int> visitedCountNotifier = ValueNotifier<int>(0);
+  final ValueNotifier<int> plannedCountNotifier = ValueNotifier<int>(0);
 
-  /// Validate login credentials
-  bool login(String emailOrUsername, String password) {
-    try {
-      final account = _accounts.firstWhere(
-        (account) =>
-            (account.email == emailOrUsername || account.username == emailOrUsername) &&
-            account.password == password,
-      );
-      _currentUser = account;
-      // Update notifier for visited count
-      visitedCountNotifier.value = _currentUser?.visitedCountries.length ?? 0;
-  // Update notifier for planned count
-  plannedCountNotifier.value = _currentUser?.plannedCountries.length ?? 0;
-      return true;
-    } catch (e) {
-      return false;
-    }
-  }
-
-  /// Logout the current user
-  void logout() {
-    _currentUser = null;
-  }
-
-  /// Get the current logged-in user
   UserAccount? getCurrentUser() => _currentUser;
 
-  /// Get all registered accounts (for debugging)
-  List<UserAccount> getAllAccounts() => List.unmodifiable(_accounts);
+  /// Regista uma conta no Firebase Auth e cria o perfil no Firestore
+  Future<bool> registerAccount(String name, String email, String password) async {
+    try {
+      // 1. Criar utilizador no Firebase Auth
+      UserCredential res = await _auth.createUserWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
 
-  /// Update user name in the current session
-  void updateCurrentUserName(String newName) {
-    if (_currentUser != null) {
-      _currentUser = _currentUser!.copyWith(name: newName);
-      // Replace account in list as well
-      for (int i = 0; i < _accounts.length; i++) {
-        if (_accounts[i].email == _currentUser!.email) {
-          _accounts[i] = _currentUser!;
-          break;
-        }
+      if (res.user != null) {
+        // 2. Criar documento inicial no Firestore
+        await _db.collection('users').doc(res.user!.uid).set({
+          'name': name,
+          'email': email,
+          'visitedCountries': [],
+          'plannedCountries': [],
+        });
+        return true;
       }
+      return false;
+    } catch (e) {
+      debugPrint("Erro no registo: $e");
+      return false;
     }
   }
 
-  /// Delete the current user account
-  bool deleteCurrentUser() {
-    if (_currentUser != null) {
-      final removed = _accounts.remove(_currentUser);
-      if (removed) {
-        _currentUser = null;
-        visitedCountNotifier.value = 0;
-        plannedCountNotifier.value = 0;
+  /// Autentica o utilizador e carrega os seus dados da Cloud
+  Future<bool> login(String email, String password) async {
+    try {
+      UserCredential res = await _auth.signInWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+      if (res.user != null) {
+        await refreshUserData();
+        return true;
       }
-      return removed;
+      return false;
+    } catch (e) {
+      debugPrint("Erro no login: $e");
+      return false;
     }
-    return false;
   }
 
-  /// Mark a country as visited for the current user
-  bool markCountryVisitedForCurrentUser(String countryCode) {
-    if (_currentUser == null) return false;
-    final code = countryCode.toUpperCase();
-    final already = _currentUser!.visitedCountries.contains(code);
-    if (already) return false;
-    // Add to visited and remove from planned if present
-    final newVisited = Set<String>.from(_currentUser!.visitedCountries)..add(code);
-    final newPlanned = Set<String>.from(_currentUser!.plannedCountries)..remove(code);
-    _currentUser = _currentUser!.copyWith(visitedCountries: newVisited, plannedCountries: newPlanned);
-    // update stored account
-    for (int i = 0; i < _accounts.length; i++) {
-      if (_accounts[i].email == _currentUser!.email) {
-        _accounts[i] = _currentUser!;
-        break;
-      }
-    }
-    visitedCountNotifier.value = _currentUser!.visitedCountries.length;
-    plannedCountNotifier.value = _currentUser!.plannedCountries.length;
-    return true;
-  }
+  /// Sincroniza os dados do Firestore com o estado local da App
+  Future<void> refreshUserData() async {
+    final user = _auth.currentUser;
+    if (user == null) return;
 
-  /// Toggle visited state for the current user. Returns true if now visited.
-  bool toggleVisitedForCurrentUser(String countryCode) {
-    if (_currentUser == null) return false;
-    final code = countryCode.toUpperCase();
-    final currentSet = Set<String>.from(_currentUser!.visitedCountries);
-    if (currentSet.contains(code)) {
-      currentSet.remove(code);
-      _currentUser = _currentUser!.copyWith(visitedCountries: currentSet);
-      for (int i = 0; i < _accounts.length; i++) {
-        if (_accounts[i].email == _currentUser!.email) {
-          _accounts[i] = _currentUser!;
-          break;
-        }
-      }
+    DocumentSnapshot doc = await _db.collection('users').doc(user.uid).get();
+    if (doc.exists) {
+      final data = doc.data() as Map<String, dynamic>;
+      
+      _currentUser = UserAccount(
+        name: data['name'] ?? 'User',
+        email: data['email'] ?? '',
+        visitedCountries: Set<String>.from(data['visitedCountries'] ?? []),
+        plannedCountries: Set<String>.from(data['plannedCountries'] ?? []),
+      );
+
+      // Atualiza notifiers globais
       visitedCountNotifier.value = _currentUser!.visitedCountries.length;
       plannedCountNotifier.value = _currentUser!.plannedCountries.length;
-      return false;
-    } else {
-      currentSet.add(code);
-      // When marking visited, remove from planned if present
-      final newPlanned = Set<String>.from(_currentUser!.plannedCountries)..remove(code);
-      _currentUser = _currentUser!.copyWith(visitedCountries: currentSet, plannedCountries: newPlanned);
-      for (int i = 0; i < _accounts.length; i++) {
-        if (_accounts[i].email == _currentUser!.email) {
-          _accounts[i] = _currentUser!;
-          break;
-        }
-      }
-      visitedCountNotifier.value = _currentUser!.visitedCountries.length;
-      plannedCountNotifier.value = _currentUser!.plannedCountries.length;
-      return true;
+      userNameNotifier.value = _currentUser!.name;
     }
   }
 
-  /// Toggle planned (future trip) state for the current user. Returns true if now planned.
-  bool togglePlannedForCurrentUser(String countryCode) {
-    if (_currentUser == null) return false;
-    final code = countryCode.toUpperCase();
-    final currentSet = Set<String>.from(_currentUser!.plannedCountries);
-    if (currentSet.contains(code)) {
-      currentSet.remove(code);
-      _currentUser = _currentUser!.copyWith(plannedCountries: currentSet);
-      for (int i = 0; i < _accounts.length; i++) {
-        if (_accounts[i].email == _currentUser!.email) {
-          _accounts[i] = _currentUser!;
-          break;
-        }
-      }
-      plannedCountNotifier.value = _currentUser!.plannedCountries.length;
-      return false;
+  /// Logout
+  Future<void> logout() async {
+    await _auth.signOut();
+    _currentUser = null;
+    visitedCountNotifier.value = 0;
+    plannedCountNotifier.value = 0;
+    userNameNotifier.value = 'Guest';
+  }
+
+  // --- Lógica de Toggle (Mapa) ---
+
+  Future<void> toggleVisitedForCurrentUser(String countryCode) async {
+    if (_currentUser == null) return;
+    final String code = countryCode.toUpperCase();
+    final userDoc = _db.collection('users').doc(_auth.currentUser!.uid);
+
+    if (_currentUser!.visitedCountries.contains(code)) {
+      // Remover de visitados
+      await userDoc.update({
+        'visitedCountries': FieldValue.arrayRemove([code])
+      });
     } else {
-      // Do not add to planned if already visited
-      if (_currentUser!.visitedCountries.contains(code)) return false;
-      currentSet.add(code);
-      _currentUser = _currentUser!.copyWith(plannedCountries: currentSet);
-      for (int i = 0; i < _accounts.length; i++) {
-        if (_accounts[i].email == _currentUser!.email) {
-          _accounts[i] = _currentUser!;
-          break;
-        }
-      }
-      plannedCountNotifier.value = _currentUser!.plannedCountries.length;
-      return true;
+      // Adicionar a visitados e garantir que sai dos planeados
+      await userDoc.update({
+        'visitedCountries': FieldValue.arrayUnion([code]),
+        'plannedCountries': FieldValue.arrayRemove([code])
+      });
     }
+    await refreshUserData();
   }
 
-  bool isCountryVisitedForCurrentUser(String countryCode) {
-    if (_currentUser == null) return false;
-    final code = countryCode.toUpperCase();
-    return _currentUser!.visitedCountries.contains(code);
+  Future<void> togglePlannedForCurrentUser(String countryCode) async {
+    if (_currentUser == null) return;
+    final String code = countryCode.toUpperCase();
+    
+    // Se já visitou, não faz sentido planear
+    if (_currentUser!.visitedCountries.contains(code)) return;
+
+    final userDoc = _db.collection('users').doc(_auth.currentUser!.uid);
+
+    if (_currentUser!.plannedCountries.contains(code)) {
+      await userDoc.update({
+        'plannedCountries': FieldValue.arrayRemove([code])
+      });
+    } else {
+      await userDoc.update({
+        'plannedCountries': FieldValue.arrayUnion([code])
+      });
+    }
+    await refreshUserData();
   }
 
-  bool isCountryPlannedForCurrentUser(String countryCode) {
-    if (_currentUser == null) return false;
-    final code = countryCode.toUpperCase();
-    return _currentUser!.plannedCountries.contains(code);
-  }
-
-  int getVisitedCountForCurrentUser() => _currentUser?.visitedCountries.length ?? 0;
-
-  List<String> getVisitedCountriesForCurrentUser() => List.unmodifiable(_currentUser?.visitedCountries ?? <String>[]);
-  List<String> getPlannedCountriesForCurrentUser() => List.unmodifiable(_currentUser?.plannedCountries ?? <String>[]);
+  // --- Getters ---
+  bool isCountryVisitedForCurrentUser(String code) => _currentUser?.visitedCountries.contains(code.toUpperCase()) ?? false;
+  bool isCountryPlannedForCurrentUser(String code) => _currentUser?.plannedCountries.contains(code.toUpperCase()) ?? false;
+  List<String> getVisitedCountriesForCurrentUser() => _currentUser?.visitedCountries.toList() ?? [];
 }

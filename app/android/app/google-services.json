@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "38259564016",
+    "project_id": "wmap-1fabb",
+    "storage_bucket": "wmap-1fabb.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:38259564016:android:eaaa52dcfccac4fa019135",
+        "android_client_info": {
+          "package_name": "com.example.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA4cTqxGbeUV2xQo9OW5m7J3mhN5nBvcdo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
