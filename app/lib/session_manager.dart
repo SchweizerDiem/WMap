@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'user.dart';
+import 'post.dart';
 
 /// Modelo de dados da conta (simplificado para o Firebase)
 class UserAccount {
@@ -9,21 +10,25 @@ class UserAccount {
   final String email;
   final Set<String> visitedCountries;
   final Set<String> plannedCountries;
+  final List<String> friends;
 
   UserAccount({
     required this.name,
     required this.email,
     Set<String>? visitedCountries,
     Set<String>? plannedCountries,
+    List<String>? friends,
   }) : visitedCountries = visitedCountries ?? <String>{},
-       plannedCountries = plannedCountries ?? <String>{};
+       plannedCountries = plannedCountries ?? <String>{},
+       friends = friends ?? <String>[];
 
-  UserAccount copyWith({String? name, Set<String>? visitedCountries, Set<String>? plannedCountries}) {
+  UserAccount copyWith({String? name, Set<String>? visitedCountries, Set<String>? plannedCountries, List<String>? friends}) {
     return UserAccount(
       name: name ?? this.name,
       email: email,
       visitedCountries: visitedCountries ?? Set<String>.from(this.visitedCountries),
       plannedCountries: plannedCountries ?? Set<String>.from(this.plannedCountries),
+      friends: friends ?? List<String>.from(this.friends),
     );
   }
 }
@@ -102,6 +107,7 @@ class SessionManager {
         email: data['email'] ?? '',
         visitedCountries: Set<String>.from(data['visitedCountries'] ?? []),
         plannedCountries: Set<String>.from(data['plannedCountries'] ?? []),
+        friends: List<String>.from(data['friends'] ?? []),
       );
 
       // Atualiza notifiers globais
@@ -167,4 +173,98 @@ class SessionManager {
   bool isCountryVisitedForCurrentUser(String code) => _currentUser?.visitedCountries.contains(code.toUpperCase()) ?? false;
   bool isCountryPlannedForCurrentUser(String code) => _currentUser?.plannedCountries.contains(code.toUpperCase()) ?? false;
   List<String> getVisitedCountriesForCurrentUser() => _currentUser?.visitedCountries.toList() ?? [];
+
+  // --- Friends and Posts Methods ---
+  
+  /// Get all friends of the current user
+  List<String> getFriendsForCurrentUser() => _currentUser?.friends ?? [];
+
+  /// Add a friend to the current user
+  Future<void> addFriend(String friendId) async {
+    if (_currentUser == null) return;
+    final currentUserId = _auth.currentUser!.uid;
+    
+    // Add friend to current user's list
+    await _db.collection('users').doc(currentUserId).update({
+      'friends': FieldValue.arrayUnion([friendId])
+    });
+    
+    // Add current user to friend's list
+    await _db.collection('users').doc(friendId).update({
+      'friends': FieldValue.arrayUnion([currentUserId])
+    });
+    
+    await refreshUserData();
+  }
+
+  /// Remove a friend
+  Future<void> removeFriend(String friendId) async {
+    if (_currentUser == null) return;
+    final currentUserId = _auth.currentUser!.uid;
+    
+    await _db.collection('users').doc(currentUserId).update({
+      'friends': FieldValue.arrayRemove([friendId])
+    });
+    
+    await _db.collection('users').doc(friendId).update({
+      'friends': FieldValue.arrayRemove([currentUserId])
+    });
+    
+    await refreshUserData();
+  }
+
+  /// Create a new post
+  Future<void> createPost(String country, {String? description, String? imageUrl}) async {
+    if (_currentUser == null) return;
+    final userId = _auth.currentUser!.uid;
+    
+    await _db.collection('posts').add({
+      'userId': userId,
+      'userName': _currentUser!.name,
+      'country': country,
+      'description': description,
+      'imageUrl': imageUrl,
+      'createdAt': Timestamp.now(),
+    });
+  }
+
+  /// Get posts from friends
+  Stream<List<Post>> getFriendsPosts() {
+    if (_currentUser == null) {
+      return Stream.value([]);
+    }
+
+    final friendIds = _currentUser!.friends;
+    if (friendIds.isEmpty) {
+      return Stream.value([]);
+    }
+
+    return _db
+        .collection('posts')
+        .where('userId', whereIn: friendIds)
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((snapshot) => snapshot.docs.map((doc) => Post.fromFirestore(doc)).toList());
+  }
+
+  /// Get all posts from a specific user
+  Stream<List<Post>> getUserPosts(String userId) {
+    return _db
+        .collection('posts')
+        .where('userId', isEqualTo: userId)
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((snapshot) => snapshot.docs.map((doc) => Post.fromFirestore(doc)).toList());
+  }
+
+  /// Delete a post (only if it's the current user's post)
+  Future<void> deletePost(String postId) async {
+    if (_currentUser == null) return;
+    
+    try {
+      await _db.collection('posts').doc(postId).delete();
+    } catch (e) {
+      debugPrint("Error deleting post: $e");
+    }
+  }
 }

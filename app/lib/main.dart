@@ -13,7 +13,7 @@ import './pages/register.dart';
 import './pages/settings.dart';
 import './pages/profile.dart';
 import './pages/friends.dart';
-import './pages/hub.dart';
+import './pages/gallery.dart';
 
 import 'session_manager.dart';
 import 'country_names.dart';
@@ -444,7 +444,7 @@ class _HomePageState extends State<HomePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: SvgPicture.asset("../assets/images/airplane-tilt.svg", width: 40),
+        title: SvgPicture.asset("assets/images/airplane-tilt.svg", width: 40),
         automaticallyImplyLeading: false,
       ),
       bottomNavigationBar: NavigationBar(
@@ -464,8 +464,8 @@ class _HomePageState extends State<HomePage> {
             label: 'Friends',
           ),
           NavigationDestination(
-            icon: Icon(Icons.home),
-            label: 'Hub',
+            icon: Icon(Icons.image),
+            label: 'Gallery',
           ),
           NavigationDestination(
             icon: Icon(Icons.person),
@@ -553,7 +553,10 @@ class _HomePageState extends State<HomePage> {
                                       countryBorder: const CountryBorder(color: Colors.black, width: 0.4),
                                       fit: BoxFit.contain,
                                       callback: (id, name, tapdetails) {
-                                        _showCountryInfoDialog(context, id, getCountryName(id));
+                                        // Only show dialog if a valid country was clicked (not ocean/empty)
+                                        if (id.isNotEmpty) {
+                                          _showCountryInfoDialog(context, id, getCountryName(id));
+                                        }
                                       },
                                     );
                                   },
@@ -570,8 +573,14 @@ class _HomePageState extends State<HomePage> {
         // Friends page (placeholder)
         const FriendsPage(),
 
-        // Hub page (placeholder)
-        const HubPage(),
+        // Gallery page
+        GalleryPage(
+          onBackPressed: () {
+            setState(() {
+              currentPageIndex = 0;
+            });
+          },
+        ),
 
         // Profile page
         ProfilePage(
