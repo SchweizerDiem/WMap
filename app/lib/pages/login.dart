@@ -13,7 +13,11 @@ class LoginPage extends StatefulWidget {
 class _LoginPageState extends State<LoginPage> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  
+  // NOVAS VARIÁVEIS
   bool _isLoading = false; 
+  bool _obscurePassword = true; // Para o ícone de ver senha
+  bool _rememberMe = false;     // Para a Checkbox de guardar sessão
   String? errorMessage;
 
   Future<void> _login() async {
@@ -40,6 +44,10 @@ class _LoginPageState extends State<LoginPage> {
           userNameNotifier.value = user.name;
           await ProfileManager().loadProfileImage();
         }
+        
+        // Se _rememberMe for false, poderias configurar um timeout, 
+        // mas por padrão o Firebase mantém o login.
+        
         Navigator.pushReplacementNamed(context, '/home');
       } else {
         setState(() => errorMessage = 'Invalid email or password');
@@ -50,7 +58,6 @@ class _LoginPageState extends State<LoginPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // Usamos o extendBodyBehindAppBar se tiveres uma imagem de fundo
       body: Container(
         width: double.infinity,
         height: double.infinity,
@@ -97,14 +104,53 @@ class _LoginPageState extends State<LoginPage> {
                     ),
                   ),
                   const SizedBox(height: 16),
+                  
+                  // CAMPO DE PALAVRA-PASSE ATUALIZADO
                   TextField(
                     controller: _passwordController,
-                    obscureText: true,
+                    obscureText: _obscurePassword, // Variável que controla a visibilidade
                     decoration: InputDecoration(
                       labelText: 'Password',
                       prefixIcon: const Icon(Icons.lock_outline),
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          _obscurePassword ? Icons.visibility_off : Icons.visibility,
+                          color: Colors.grey,
+                        ),
+                        onPressed: () {
+                          setState(() {
+                            _obscurePassword = !_obscurePassword;
+                          });
+                        },
+                      ),
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                     ),
+                  ),
+                  
+                  const SizedBox(height: 10),
+
+                  // CHECKBOX GUARDAR SESSÃO
+                  Row(
+                    children: [
+                      SizedBox(
+                        height: 24,
+                        width: 24,
+                        child: Checkbox(
+                          value: _rememberMe,
+                          activeColor: const Color(0xff6c63ff),
+                          onChanged: (value) {
+                            setState(() {
+                              _rememberMe = value ?? false;
+                            });
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      const Text(
+                        "Remember me",
+                        style: TextStyle(color: Colors.grey, fontSize: 14),
+                      ),
+                    ],
                   ),
                   
                   if (errorMessage != null) ...[
@@ -112,9 +158,8 @@ class _LoginPageState extends State<LoginPage> {
                     Text(errorMessage!, style: const TextStyle(color: Colors.red, fontSize: 13)),
                   ],
 
-                  const SizedBox(height: 30),
+                  const SizedBox(height: 20),
                   
-                  // Botão de Login
                   SizedBox(
                     width: double.infinity,
                     height: 50,
@@ -137,7 +182,6 @@ class _LoginPageState extends State<LoginPage> {
                   
                   const SizedBox(height: 20),
                   
-                  // Link para Criar Conta (O que faltava!)
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [

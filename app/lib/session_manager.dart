@@ -12,17 +12,17 @@ class UserAccount {
   final Set<String> visitedCountries;
   final Set<String> plannedCountries;
   final List<String> friends;
+  final List<String> nationalities;
 
   UserAccount({
     required this.name,
     required this.email,
     required this.friendCode,
-    Set<String>? visitedCountries,
-    Set<String>? plannedCountries,
-    List<String>? friends,
-  }) : visitedCountries = visitedCountries ?? <String>{},
-       plannedCountries = plannedCountries ?? <String>{},
-       friends = friends ?? <String>[];
+    required this.visitedCountries,
+    required this.plannedCountries,
+    required this.friends,
+    this.nationalities = const [],
+  });   
 }
 
 class SessionManager {
@@ -106,6 +106,7 @@ class SessionManager {
       visitedCountries: Set<String>.from(data['visitedCountries'] ?? []),
       plannedCountries: Set<String>.from(data['plannedCountries'] ?? []),
       friends: List<String>.from(data['friends'] ?? []),
+      nationalities: List<String>.from(data['nationalities'] ?? []),
     );
 
     // 2. Notificamos os Notifiers para a UI reagir
@@ -380,5 +381,19 @@ class SessionManager {
       rethrow;
     }
   }
+
+  Future<void> updateNationalities(List<String> codes) async {
+  final uid = _auth.currentUser?.uid;
+  if (uid == null) return;
+
+  // 1. Atualiza no Firestore
+  await _db.collection('users').doc(uid).update({
+    'nationalities': codes,
+  });
+  
+  // 2. MUITO IMPORTANTE: Atualiza os dados locais e avisa os Notifiers
+  await refreshUserData(); 
+}
+
 }
 

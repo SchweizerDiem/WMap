@@ -12,6 +12,16 @@ class FriendProfilePage extends StatelessWidget {
 
   String normalize(String code) => code.toLowerCase();
 
+  // Função auxiliar para converter código em Emoji de bandeira
+  String _countryCodeToEmoji(String countryCode) {
+    final code = countryCode.toUpperCase();
+    if (code.length != 2) return '';
+    final base = 0x1F1E6;
+    final first = base + code.codeUnitAt(0) - 'A'.codeUnitAt(0);
+    final second = base + code.codeUnitAt(1) - 'A'.codeUnitAt(0);
+    return String.fromCharCode(first) + String.fromCharCode(second);
+  }
+
   @override
   Widget build(BuildContext context) {
     final String friendId = friendData['id'] ?? '';
@@ -19,22 +29,34 @@ class FriendProfilePage extends StatelessWidget {
     final Set<String> visited = Set<String>.from(friendData['visitedCountries'] ?? []);
     final Set<String> planned = Set<String>.from(friendData['plannedCountries'] ?? []);
     
+    // NOVO: Extrair nacionalidades do friendData
+    final List<String> nationalities = List<String>.from(friendData['nationalities'] ?? []);
+    
     const int totalCountries = 250;
     final percent = (visited.length / totalCountries * 100);
 
     final Map<String, Color> colorMap = {};
+
+    // 1. Pintar Planeados (Base)
+    for (var code in planned) {
+      colorMap[normalize(code)] = const Color.fromARGB(255, 6, 16, 148);
+    }
+
+    // 2. Pintar Visitados (Sobrepõe o planeado)
     for (var code in visited) {
       colorMap[normalize(code)] = const Color.fromARGB(255, 31, 131, 212);
     }
-    for (var code in planned) {
-      colorMap.putIfAbsent(normalize(code), () => const Color.fromARGB(255, 6, 16, 148));
+
+    // 3. Pintar Nacionalidades (Sobrepõe TUDO)
+    // Colocamos por último para garantir que a cor da nacionalidade é a final
+    for (var code in nationalities) {
+      colorMap[normalize(code)] = const Color.fromARGB(255, 9, 181, 233);
     }
 
     return Scaffold(
       appBar: AppBar(
         title: Text("$name's Profile"),
         actions: [
-          // Botão para remover amigo
           IconButton(
             icon: const Icon(Icons.person_remove, color: Colors.redAccent),
             onPressed: () => _showRemoveDialog(context, friendId, name),
@@ -47,11 +69,31 @@ class FriendProfilePage extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 1. Nome do Amigo
-            Text(
-              name,
-              style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
+            // 1. Nome do Amigo e Nacionalidades (Bandeiras)
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  name,
+                  style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
+                ),
+                if (nationalities.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.public, size: 16, color: Colors.grey),
+                        const SizedBox(width: 6),
+                        Text(
+                          nationalities.map((code) => _countryCodeToEmoji(code)).join(' '),
+                          style: const TextStyle(fontSize: 20),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
             ),
+            
             const SizedBox(height: 16),
 
             // 2. Mapa Estático Centrado
@@ -80,7 +122,7 @@ class FriendProfilePage extends StatelessWidget {
 
             const SizedBox(height: 24),
 
-            // 3. Card de Países Visitados (Igual ao Profile)
+            // 3. Card de Países Visitados
             Card(
               elevation: 2,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -118,7 +160,7 @@ class FriendProfilePage extends StatelessWidget {
 
             const SizedBox(height: 16),
 
-            // 4. Card de Percentagem (Igual ao Profile)
+            // 4. Card de Percentagem
             Card(
               elevation: 2,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -163,7 +205,7 @@ class FriendProfilePage extends StatelessWidget {
 
             const SizedBox(height: 16),
 
-            // 5. Card de Viagens Futuras (Igual ao Profile)
+            // 5. Card de Viagens Futuras
             Card(
               elevation: 2,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -218,8 +260,8 @@ class FriendProfilePage extends StatelessWidget {
             onPressed: () async {
               await SessionManager().removeFriend(friendId);
               if (context.mounted) {
-                Navigator.pop(context); // Fecha o dialog
-                Navigator.pop(context); // Volta para a lista de amigos
+                Navigator.pop(context); 
+                Navigator.pop(context); 
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(content: Text('$name removed.')),
                 );
