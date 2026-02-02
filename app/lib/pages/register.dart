@@ -88,12 +88,12 @@ class _RegisterPageState extends State<RegisterPage> {
       if (success) {
         // MUDADO: Login assíncrono automático
         await sessionManager.login(email, password);
+
+        await sessionManager.refreshUserData();
         
         if (mounted) {
-          final user = sessionManager.getCurrentUser();
-          if (user != null) {
-            userNameNotifier.value = user.name;
-          }
+          // Agora o userNameNotifier recebe o nome que veio do Firestore
+          userNameNotifier.value = sessionManager.getCurrentUser()?.name ?? name;
           Navigator.pushReplacementNamed(context, '/home');
         }
       } else {

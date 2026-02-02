@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:country_flags/country_flags.dart' as country_flags;
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
+import 'package:flutter/services.dart';
 import '../user.dart';
 import '../session_manager.dart';
 import '../profile_manager.dart';
@@ -48,7 +49,6 @@ class _ProfilePageState extends State<ProfilePage> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Profile'),
-        centerTitle: true,
         leading: widget.onBackPressed != null
             ? IconButton(
                 icon: const Icon(Icons.arrow_back),
@@ -151,6 +151,48 @@ class _ProfilePageState extends State<ProfilePage> {
               },
             ),
             const SizedBox(height: 24),
+            const SizedBox(height: 4),
+            Builder(
+              builder: (context) {
+                // Obtemos o código do utilizador atual através do SessionManager
+                final friendCode = SessionManager().getCurrentUser()?.friendCode ?? '---';
+                
+                return InkWell(
+                  onTap: () {
+                    // Copia o código para o clipboard
+                    Clipboard.setData(ClipboardData(text: friendCode));
+                    // Mostra um aviso rápido ao utilizador
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Friend code copied to clipboard!'),
+                        duration: Duration(seconds: 2),
+                      ),
+                    );
+                  },
+                  borderRadius: BorderRadius.circular(8),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          friendCode,
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.blueGrey[600],
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 1.2,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Icon(Icons.copy, size: 16, color: Colors.blueGrey[400]),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+
             const Divider(),
             const SizedBox(height: 16),
             // Stats with real visited count

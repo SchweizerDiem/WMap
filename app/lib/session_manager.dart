@@ -1,13 +1,14 @@
 import 'package:flutter/foundation.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'dart:math';
 import 'user.dart';
 import 'post.dart';
 
-/// Modelo de dados da conta (simplificado para o Firebase)
 class UserAccount {
   final String name;
   final String email;
+  final String friendCode;
   final Set<String> visitedCountries;
   final Set<String> plannedCountries;
   final List<String> friends;
@@ -15,22 +16,13 @@ class UserAccount {
   UserAccount({
     required this.name,
     required this.email,
+    required this.friendCode,
     Set<String>? visitedCountries,
     Set<String>? plannedCountries,
     List<String>? friends,
   }) : visitedCountries = visitedCountries ?? <String>{},
        plannedCountries = plannedCountries ?? <String>{},
        friends = friends ?? <String>[];
-
-  UserAccount copyWith({String? name, Set<String>? visitedCountries, Set<String>? plannedCountries, List<String>? friends}) {
-    return UserAccount(
-      name: name ?? this.name,
-      email: email,
-      visitedCountries: visitedCountries ?? Set<String>.from(this.visitedCountries),
-      plannedCountries: plannedCountries ?? Set<String>.from(this.plannedCountries),
-      friends: friends ?? List<String>.from(this.friends),
-    );
-  }
 }
 
 class SessionManager {
@@ -42,29 +34,36 @@ class SessionManager {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
 
   UserAccount? _currentUser;
-
-  // Notifiers para a UI (Ecrã de Perfil/Home)
   final ValueNotifier<int> visitedCountNotifier = ValueNotifier<int>(0);
   final ValueNotifier<int> plannedCountNotifier = ValueNotifier<int>(0);
 
   UserAccount? getCurrentUser() => _currentUser;
 
-  /// Regista uma conta no Firebase Auth e cria o perfil no Firestore
+  // --- Funções Auxiliares ---
+
+  String _generateFriendCode() {
+    final random = Random();
+    int code = random.nextInt(900000) + 100000;
+    return "WMP-$code";
+  }
+
+  // --- Auth ---
+
   Future<bool> registerAccount(String name, String email, String password) async {
     try {
-      // 1. Criar utilizador no Firebase Auth
       UserCredential res = await _auth.createUserWithEmailAndPassword(
         email: email,
         password: password,
       );
 
       if (res.user != null) {
-        // 2. Criar documento inicial no Firestore
         await _db.collection('users').doc(res.user!.uid).set({
           'name': name,
           'email': email,
+          'friendCode': _generateFriendCode(),
           'visitedCountries': [],
           'plannedCountries': [],
+          'friends': [],
         });
         return true;
       }
@@ -75,48 +74,135 @@ class SessionManager {
     }
   }
 
-  /// Autentica o utilizador e carrega os seus dados da Cloud
   Future<bool> login(String email, String password) async {
-    try {
-      UserCredential res = await _auth.signInWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
-      if (res.user != null) {
-        await refreshUserData();
-        return true;
-      }
-      return false;
-    } catch (e) {
-      debugPrint("Erro no login: $e");
-      return false;
-    }
+  try {
+    await _auth.signInWithEmailAndPassword(email: email, password: password);
+    
+    // FORÇAR O CARREGAMENTO DOS DADOS DO FIRESTORE
+    await refreshUserData(); 
+    
+    return true;
+  } catch (e) {
+    debugPrint("Login error: $e");
+    return false;
   }
+}
 
-  /// Sincroniza os dados do Firestore com o estado local da App
   Future<void> refreshUserData() async {
-    final user = _auth.currentUser;
-    if (user == null) return;
+  final user = _auth.currentUser;
+  if (user == null) return;
 
-    DocumentSnapshot doc = await _db.collection('users').doc(user.uid).get();
-    if (doc.exists) {
-      final data = doc.data() as Map<String, dynamic>;
-      
-      _currentUser = UserAccount(
-        name: data['name'] ?? 'User',
-        email: data['email'] ?? '',
-        visitedCountries: Set<String>.from(data['visitedCountries'] ?? []),
-        plannedCountries: Set<String>.from(data['plannedCountries'] ?? []),
-        friends: List<String>.from(data['friends'] ?? []),
-      );
+  // Forçamos a leitura fresca do Firestore
+  DocumentSnapshot doc = await _db.collection('users').doc(user.uid).get();
+  
+  if (doc.exists) {
+    final data = doc.data() as Map<String, dynamic>;
+    
+    // 1. Atualizamos o objeto local
+    _currentUser = UserAccount(
+      name: data['name'] ?? 'User',
+      email: data['email'] ?? '',
+      friendCode: data['friendCode'] ?? 'N/A',
+      visitedCountries: Set<String>.from(data['visitedCountries'] ?? []),
+      plannedCountries: Set<String>.from(data['plannedCountries'] ?? []),
+      friends: List<String>.from(data['friends'] ?? []),
+    );
 
-      // Atualiza notifiers globais
-      visitedCountNotifier.value = _currentUser!.visitedCountries.length;
-      plannedCountNotifier.value = _currentUser!.plannedCountries.length;
-      userNameNotifier.value = _currentUser!.name;
+    // 2. Notificamos os Notifiers para a UI reagir
+    visitedCountNotifier.value = _currentUser!.visitedCountries.length;
+    plannedCountNotifier.value = _currentUser!.plannedCountries.length;
+    
+    // IMPORTANTE: Isto garante que o nome no topo do perfil e noutras páginas muda
+    userNameNotifier.value = _currentUser!.name; 
+    
+    debugPrint("User data refreshed: Name is now ${_currentUser!.name}");
+  }
+}
+
+  // --- NOVO SISTEMA DE AMIGOS (PEDIDOS) ---
+
+  /// Envia um pedido de amizade usando o código
+  Future<String> sendFriendRequest(String code) async {
+    try {
+      final currentUserId = _auth.currentUser?.uid;
+      if (currentUserId == null || _currentUser == null) return "Erro de sessão";
+
+      final cleanCode = code.toUpperCase().trim();
+
+      // 1. Procurar o utilizador pelo código
+      final query = await _db.collection('users').where('friendCode', isEqualTo: cleanCode).get();
+      if (query.docs.isEmpty) return "User not found.";
+
+      final targetId = query.docs.first.id;
+      if (targetId == currentUserId) return "You can't add yourself.";
+      if (_currentUser!.friends.contains(targetId)) return "Already friends.";
+
+      // 2. Criar pedido pendente
+      // Usamos um ID fixo para evitar pedidos duplicados entre as mesmas duas pessoas
+      await _db.collection('friend_requests').doc("${currentUserId}_$targetId").set({
+        'from': currentUserId,
+        'to': targetId,
+        'senderName': _currentUser!.name,
+        'status': 'pending',
+        'timestamp': FieldValue.serverTimestamp(),
+      });
+
+      return "Request sent!";
+    } catch (e) {
+      return "Error: $e";
     }
   }
 
+  /// Aceita um pedido de amizade e cria a ligação mútua
+  Future<void> acceptFriendRequest(String requestId, String fromUserId) async {
+    try {
+      final currentUserId = _auth.currentUser!.uid;
+
+      // 1. Adicionar aos amigos de ambos
+      await _db.collection('users').doc(currentUserId).update({
+        'friends': FieldValue.arrayUnion([fromUserId])
+      });
+      await _db.collection('users').doc(fromUserId).update({
+        'friends': FieldValue.arrayUnion([currentUserId])
+      });
+
+      // 2. Apagar o pedido
+      await _db.collection('friend_requests').doc(requestId).delete();
+
+      await refreshUserData();
+    } catch (e) {
+      debugPrint("Error accepting friend: $e");
+    }
+  }
+
+  /// Rejeita/Apaga um pedido de amizade
+  Future<void> rejectFriendRequest(String requestId) async {
+    await _db.collection('friend_requests').doc(requestId).delete();
+  }
+
+  /// Stream para ouvir pedidos de amizade que TU recebeste
+  Stream<QuerySnapshot> getIncomingRequestsStream() {
+    final currentUserId = _auth.currentUser?.uid;
+    return _db.collection('friend_requests')
+        .where('to', isEqualTo: currentUserId)
+        .where('status', isEqualTo: 'pending')
+        .snapshots();
+  }
+
+  /// Stream para obter os detalhes dos teus amigos (nomes, fotos, etc)
+  Stream<List<Map<String, dynamic>>> getFriendsListStream() {
+    if (_currentUser == null || _currentUser!.friends.isEmpty) {
+      return Stream.value([]);
+    }
+
+    return _db.collection('users')
+        .where(FieldPath.documentId, whereIn: _currentUser!.friends)
+        .snapshots()
+        .map((snapshot) => snapshot.docs.map((doc) => {
+          'id': doc.id,
+          ...doc.data()
+        }).toList());
+  }
   /// Logout
   Future<void> logout() async {
     await _auth.signOut();
@@ -202,15 +288,16 @@ class SessionManager {
     if (_currentUser == null) return;
     final currentUserId = _auth.currentUser!.uid;
     
+    // 1. Remove de ambos os lados no Firestore
     await _db.collection('users').doc(currentUserId).update({
       'friends': FieldValue.arrayRemove([friendId])
     });
-    
     await _db.collection('users').doc(friendId).update({
       'friends': FieldValue.arrayRemove([currentUserId])
     });
     
-    await refreshUserData();
+    // 2. IMPORTANTE: Forçar a atualização dos dados locais
+    await refreshUserData(); 
   }
 
   /// Create a new post
@@ -267,4 +354,31 @@ class SessionManager {
       debugPrint("Error deleting post: $e");
     }
   }
+
+  Future<void> updateUserName(String newName) async {
+    try {
+      final uid = _auth.currentUser?.uid;
+      if (uid == null) {
+        debugPrint("Erro: UID do utilizador é nulo.");
+        return;
+      }
+
+      // 1. Tenta atualizar no Firestore
+      // Certifica-se de que a coleção se chama 'users' (minúsculo)
+      await _db.collection('users').doc(uid).update({
+        'name': newName,
+      });
+
+      debugPrint("Firestore atualizado com sucesso para: $newName");
+
+      // 2. Só depois de confirmar o sucesso no Firebase é que atualizamos a App
+      await refreshUserData();
+      
+    } catch (e) {
+      debugPrint("Erro detalhado ao atualizar nome no Firestore: $e");
+      // Lança a exceção para que a UI (SettingsPage) possa mostrar o erro
+      rethrow;
+    }
+  }
 }
+

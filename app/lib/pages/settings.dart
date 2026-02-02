@@ -70,13 +70,25 @@ class _SettingsPageState extends State<SettingsPage> {
                             final newName = _nameController.text.trim();
                             if (newName.isEmpty) return;
                             
-                            // No Firebase, o SessionManager deve ter um método para atualizar o nome
-                            // Por agora, atualizamos o notifier e podes depois adicionar a lógica no Firestore
-                            userNameNotifier.value = newName;
-                            
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Name updated locally')),
-                            );
+                            setState(() => _isLoading = true);
+
+                            try {
+                              await SessionManager().updateUserName(newName);
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('Guardado no Firebase!')),
+                                );
+                              }
+                            } catch (e) {
+                              print("ERRO CAPTURADO NA UI: $e"); // Vê o que aparece aqui!
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text('Erro ao guardar: $e')),
+                                );
+                              }
+                            } finally {
+                              if (mounted) setState(() => _isLoading = false);
+                            }
                           },
                           child: const Text('Update Name'),
                         ),
