@@ -373,11 +373,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                 children: codes.map((code) {
                                   final name = getCountryName(code);
                                   return ListTile(
-                                    leading: SizedBox(
-                                      width: 40,
-                                      height: 24,
-                                      child: country_flags.CountryFlag.fromCountryCode(code),
-                                    ),
+                                    leading: buildFlag(code), // Usa a função que lida com o Kosovo e outros
                                     title: Text(name),
                                     subtitle: Text(code.toUpperCase()),
                                   );

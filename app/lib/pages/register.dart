@@ -15,10 +15,11 @@ class _RegisterPageState extends State<RegisterPage> {
   final _passwordController = TextEditingController();
   final _confirmController = TextEditingController();
 
-  // ValueNotifier to track password changes in real-time
   late final ValueNotifier<String> _passwordNotifier;
 
   bool _isLoading = false;
+  bool _obscurePassword = true;        // Para a senha principal
+  bool _obscureConfirmPassword = true; // Para o confirmar senha
   String? errorMessage;
 
   @override
@@ -30,25 +31,22 @@ class _RegisterPageState extends State<RegisterPage> {
     });
   }
 
-  // Validate email format: must contain @ and a domain extension like .com
   bool _isValidEmail(String email) {
     final emailRegex = RegExp(r'^[^@]+@[^@]+\.[a-zA-Z]{2,}$');
     return emailRegex.hasMatch(email);
   }
 
-  // Validate password: minimum 12 chars, uppercase, lowercase, special chars, and numbers
   bool _isValidPassword(String password) {
     if (password.length < 12) return false;
-    if (!RegExp(r'[A-Z]').hasMatch(password)) return false; // uppercase
-    if (!RegExp(r'[a-z]').hasMatch(password)) return false; // lowercase
-    if (!RegExp(r'[0-9]').hasMatch(password)) return false; // number
-    // Check for special characters: !@#$%^&*()_+-=[]{}; etc
+    if (!RegExp(r'[A-Z]').hasMatch(password)) return false;
+    if (!RegExp(r'[a-z]').hasMatch(password)) return false;
+    if (!RegExp(r'[0-9]').hasMatch(password)) return false;
     final specialCharRegex = RegExp(r'[!@#$%^&*()_+\-=\[\]{};:`~<>?/\\|.,]');
     if (!specialCharRegex.hasMatch(password)) return false;
     return true;
   }
 
-  Future<void> _register() async { // MUDADO: Agora é Future/async
+  Future<void> _register() async {
     final name = _nameController.text.trim();
     final email = _emailController.text.trim();
     final password = _passwordController.text;
@@ -58,17 +56,14 @@ class _RegisterPageState extends State<RegisterPage> {
       setState(() => errorMessage = 'Please fill in all fields');
       return;
     }
-
     if (!_isValidEmail(email)) {
       setState(() => errorMessage = 'Invalid email format.');
       return;
     }
-
     if (!_isValidPassword(password)) {
       setState(() => errorMessage = 'Password does not meet requirements');
       return;
     }
-
     if (password != confirm) {
       setState(() => errorMessage = 'Passwords do not match');
       return;
@@ -81,18 +76,13 @@ class _RegisterPageState extends State<RegisterPage> {
 
     try {
       final sessionManager = SessionManager();
-      
-      // MUDADO: Registo assíncrono no Firebase
       bool success = await sessionManager.registerAccount(name, email, password);
 
       if (success) {
-        // MUDADO: Login assíncrono automático
         await sessionManager.login(email, password);
-
         await sessionManager.refreshUserData();
         
         if (mounted) {
-          // Agora o userNameNotifier recebe o nome que veio do Firestore
           userNameNotifier.value = sessionManager.getCurrentUser()?.name ?? name;
           Navigator.pushReplacementNamed(context, '/home');
         }
@@ -109,120 +99,140 @@ class _RegisterPageState extends State<RegisterPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // deixa o Scaffold transparente para o gradient do container aparecer
-      backgroundColor: Colors.transparent,
       body: Container(
         width: double.infinity,
         height: double.infinity,
         decoration: const BoxDecoration(
           gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-            Color(0xffff6363),
-            Color(0xff6c63ff),
-            ],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xff6c63ff), Color(0xff4841a8)],
           ),
         ),
         child: Center(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 36),
+            padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 40),
             child: Container(
-              constraints: const BoxConstraints(maxWidth: 520),
+              padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(20),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.12),
-                    blurRadius: 20,
-                    offset: Offset(0, 8),
-                  ),
+                    color: Colors.black.withOpacity(0.1),
+                    blurRadius: 10,
+                    offset: const Offset(0, 5),
+                  )
                 ],
               ),
-              padding: const EdgeInsets.all(30),
               child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   const Text(
-                    'Create an account',
-                    style: TextStyle(
-                      fontFamily: 'Poppins',
-                      fontWeight: FontWeight.bold,
-                      fontSize: 22,
+                    "Create Account",
+                    style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Color(0xff4841a8)),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text("Join our community today", style: TextStyle(color: Colors.grey)),
+                  const SizedBox(height: 25),
+                  
+                  TextField(
+                    controller: _nameController,
+                    decoration: InputDecoration(
+                      labelText: 'Name/Username',
+                      prefixIcon: const Icon(Icons.person_outline),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                     ),
                   ),
                   const SizedBox(height: 16),
-                  TextField(
-                    controller: _nameController,
-                    decoration: const InputDecoration(
-                      labelText: 'Name/Username',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
+                  
                   TextField(
                     controller: _emailController,
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       labelText: 'Email',
-                      border: OutlineInputBorder(),
+                      prefixIcon: const Icon(Icons.email_outlined),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                     ),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 16),
+                  
                   TextField(
                     controller: _passwordController,
-                    decoration: const InputDecoration(
+                    obscureText: _obscurePassword,
+                    decoration: InputDecoration(
                       labelText: 'Password',
-                      border: OutlineInputBorder(),
+                      prefixIcon: const Icon(Icons.lock_outline),
+                      suffixIcon: IconButton(
+                        icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility, color: Colors.grey),
+                        onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                      ),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                     ),
-                    obscureText: true,
                   ),
                   const SizedBox(height: 12),
-                  // Password Requirements Widget
+                  
                   PasswordRequirementsWidget(
                     passwordNotifier: _passwordNotifier,
                     isValidPassword: _isValidPassword,
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 16),
+                  
                   TextField(
                     controller: _confirmController,
-                    decoration: const InputDecoration(
+                    obscureText: _obscureConfirmPassword,
+                    decoration: InputDecoration(
                       labelText: 'Confirm Password',
-                      border: OutlineInputBorder(),
-                    ),
-                    obscureText: true,
-                  ),
-                  const SizedBox(height: 18),
-                  if (errorMessage != null)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 12.0),
-                      child: Text(
-                        errorMessage!,
-                        style: const TextStyle(color: Colors.red),
+                      prefixIcon: const Icon(Icons.lock_reset),
+                      suffixIcon: IconButton(
+                        icon: Icon(_obscureConfirmPassword ? Icons.visibility_off : Icons.visibility, color: Colors.grey),
+                        onPressed: () => setState(() => _obscureConfirmPassword = !_obscureConfirmPassword),
                       ),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                     ),
+                  ),
+                  
+                  if (errorMessage != null) ...[
+                    const SizedBox(height: 16),
+                    Text(errorMessage!, style: const TextStyle(color: Colors.red, fontSize: 13)),
+                  ],
+
+                  const SizedBox(height: 25),
+                  
                   SizedBox(
                     width: double.infinity,
-                    height: 48,
+                    height: 50,
                     child: ElevatedButton(
-                      onPressed: _isLoading ? null : _register, // Desativado se estiver a carregar
+                      onPressed: _isLoading ? null : _register,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xff6c63ff),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        elevation: 0,
                       ),
                       child: _isLoading 
-                        ? const CircularProgressIndicator(color: Colors.white)
-                        : const Text(
-                            'Register',
-                            style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
-                          ),
+                        ? const SizedBox(
+                            width: 20, 
+                            height: 20, 
+                            child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)
+                          )
+                        : const Text('REGISTER', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
                     ),
                   ),
-                  const SizedBox(height: 12),
-                  TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text('Already have an account? Sign In'),
-                  )
+                  
+                  const SizedBox(height: 20),
+                  
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Text("Already have an account? "),
+                      GestureDetector(
+                        onTap: () => Navigator.pop(context),
+                        child: const Text(
+                          "Sign In",
+                          style: TextStyle(color: Color(0xff6c63ff), fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ],
+                  ),
                 ],
               ),
             ),

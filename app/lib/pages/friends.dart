@@ -1,8 +1,9 @@
+import 'package:app/main.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../session_manager.dart';
 import '../friends_management_page.dart';
-import 'friend_profile.dart'; // Importa a página de perfil do amigo
+import 'friend_profile.dart'; 
 
 class FriendsPage extends StatefulWidget {
   const FriendsPage({super.key});
@@ -19,9 +20,20 @@ class _FriendsPageState extends State<FriendsPage> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('My Friends'),
-        automaticallyImplyLeading: false,
+        // Alterado: Removemos o false para que o Flutter mostre a seta automaticamente
+        // Ou forçamos o ícone caso queiras garantir o estilo:
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () {
+            // Isto remove as páginas anteriores da memória e abre o Mapa como nova "base"
+            Navigator.pushAndRemoveUntil(
+              context,
+              MaterialPageRoute(builder: (context) => const HomePage()), 
+              (route) => false,
+            );
+          },
+        ),
         actions: [
-          // Ícone com Notificação (Bolinha Vermelha)
           StreamBuilder<QuerySnapshot>(
             stream: _sessionManager.getIncomingRequestsStream(),
             builder: (context, snapshot) {
@@ -112,15 +124,15 @@ class _FriendsPageState extends State<FriendsPage> {
                     style: const TextStyle(fontWeight: FontWeight.bold),
                   ),
                   subtitle: Text(friend['friendCode'] ?? ''),
-                  trailing: const Icon(Icons.chevron_right), // A tua seta para abrir o perfil
+                  trailing: const Icon(Icons.chevron_right),
                   onTap: () {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
                         builder: (context) => FriendProfilePage(friendData: friend),
-           ),
-      );
-},
+                      ),
+                    );
+                  },
                 ),
               );
             },

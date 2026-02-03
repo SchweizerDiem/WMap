@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart'; // Importante para o Remember Me
 import '../session_manager.dart';
 import '../user.dart';
 import '../profile_manager.dart';
@@ -14,10 +15,9 @@ class _LoginPageState extends State<LoginPage> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   
-  // NOVAS VARIÁVEIS
   bool _isLoading = false; 
-  bool _obscurePassword = true; // Para o ícone de ver senha
-  bool _rememberMe = false;     // Para a Checkbox de guardar sessão
+  bool _obscurePassword = true; 
+  bool _rememberMe = false;     
   String? errorMessage;
 
   Future<void> _login() async {
@@ -36,21 +36,26 @@ class _LoginPageState extends State<LoginPage> {
     final success = await sessionManager.login(email, password);
 
     if (mounted) {
-      setState(() => _isLoading = false);
-      
       if (success) {
+        // --- LÓGICA DO REMEMBER ME ---
+        final prefs = await SharedPreferences.getInstance();
+        // Guardamos se o utilizador quer ser lembrado ou não
+        await prefs.setBool('remember_me', _rememberMe);
+        // ------------------------------
+
         final user = sessionManager.getCurrentUser();
         if (user != null) {
           userNameNotifier.value = user.name;
           await ProfileManager().loadProfileImage();
         }
         
-        // Se _rememberMe for false, poderias configurar um timeout, 
-        // mas por padrão o Firebase mantém o login.
-        
+        setState(() => _isLoading = false);
         Navigator.pushReplacementNamed(context, '/home');
       } else {
-        setState(() => errorMessage = 'Invalid email or password');
+        setState(() {
+          _isLoading = false;
+          errorMessage = 'Invalid email or password';
+        });
       }
     }
   }
@@ -97,6 +102,7 @@ class _LoginPageState extends State<LoginPage> {
                   
                   TextField(
                     controller: _emailController,
+                    keyboardType: TextInputType.emailAddress,
                     decoration: InputDecoration(
                       labelText: 'Email',
                       prefixIcon: const Icon(Icons.email_outlined),
@@ -105,10 +111,9 @@ class _LoginPageState extends State<LoginPage> {
                   ),
                   const SizedBox(height: 16),
                   
-                  // CAMPO DE PALAVRA-PASSE ATUALIZADO
                   TextField(
                     controller: _passwordController,
-                    obscureText: _obscurePassword, // Variável que controla a visibilidade
+                    obscureText: _obscurePassword,
                     decoration: InputDecoration(
                       labelText: 'Password',
                       prefixIcon: const Icon(Icons.lock_outline),
@@ -117,11 +122,7 @@ class _LoginPageState extends State<LoginPage> {
                           _obscurePassword ? Icons.visibility_off : Icons.visibility,
                           color: Colors.grey,
                         ),
-                        onPressed: () {
-                          setState(() {
-                            _obscurePassword = !_obscurePassword;
-                          });
-                        },
+                        onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
                       ),
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                     ),
@@ -129,7 +130,6 @@ class _LoginPageState extends State<LoginPage> {
                   
                   const SizedBox(height: 10),
 
-                  // CHECKBOX GUARDAR SESSÃO
                   Row(
                     children: [
                       SizedBox(

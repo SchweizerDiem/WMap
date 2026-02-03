@@ -8,6 +8,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart'; 
 
 // Pages
 import './pages/welcome.dart';
@@ -17,7 +18,6 @@ import './pages/settings.dart';
 import './pages/profile.dart';
 import './pages/friends.dart';
 import './pages/gallery.dart';
-
 import 'session_manager.dart';
 import 'country_names.dart';
 
@@ -27,23 +27,36 @@ String normalizeCountryCode(String code) {
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
   try {
     await Firebase.initializeApp();
-    debugPrint("Firebase initialized successfully");
   } catch (e) {
-    debugPrint("Firebase already initialized: $e");
+    debugPrint("Firebase init error: $e");
   }
 
+  // --- LÓGICA DE ARRANQUE (REMEMBER ME) ---
+  final prefs = await SharedPreferences.getInstance();
+  final bool rememberMe = prefs.getBool('remember_me') ?? false;
   final user = FirebaseAuth.instance.currentUser;
-  if (user != null) {
-    await SessionManager().refreshUserData();
-  }
 
-  runApp(const MyApp());
+  Widget initialScreen;
+
+  if (rememberMe && user != null) {
+    // Se quer ser lembrado e está logado, atualiza dados e vai para Home
+    await SessionManager().refreshUserData();
+    initialScreen = const HomePage();
+  } else {
+    // Caso contrário, Welcome Page
+    initialScreen = const WelcomePage();
+  }
+  // ---------------------------------------
+
+  runApp(MyApp(initialScreen: initialScreen));
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  final Widget initialScreen;
+  const MyApp({super.key, required this.initialScreen});
 
   @override
   Widget build(BuildContext context) {
@@ -53,7 +66,7 @@ class MyApp extends StatelessWidget {
         primarySwatch: Colors.blue,
         useMaterial3: true,
       ),
-      home: WelcomePage(),
+      home: initialScreen, // Define a página inicial dinamicamente
       routes: {
         '/home': (context) => const HomePage(),
         '/login': (context) => const LoginPage(),
@@ -64,6 +77,7 @@ class MyApp extends StatelessWidget {
     );
   }
 }
+
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -171,7 +185,9 @@ class _HomePageState extends State<HomePage> {
                     child: SizedBox(
                       width: 70,
                       height: 45,
-                      child: country_flags.CountryFlag.fromCountryCode(countryCode),
+                      child: countryCode.toUpperCase() == 'XK' 
+                        ? Container(color: Colors.white, child: Center(child: Image.asset('assets/images/Flag_of_Kosovo.svg.webp', fit: BoxFit.cover)),):  
+                      country_flags.CountryFlag.fromCountryCode(countryCode),
                     ),
                   ),
                   const SizedBox(width: 15),
@@ -317,15 +333,6 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
-  String _countryCodeToEmoji(String countryCode) {
-    final code = countryCode.toUpperCase();
-    if (code.length != 2) return '';
-    final base = 0x1F1E6;
-    final first = base + code.codeUnitAt(0) - 'A'.codeUnitAt(0);
-    final second = base + code.codeUnitAt(1) - 'A'.codeUnitAt(0);
-    return String.fromCharCode(first) + String.fromCharCode(second);
-  }
-
   Future<void> _showNationalityPicker() async {
     final countries = countryNames.entries.map((e) => {'code': e.key, 'name': e.value}).toList();
 
@@ -362,7 +369,7 @@ class _HomePageState extends State<HomePage> {
                             value: selectedSet.contains(c['code']),
                             onChanged: (val) => setState(() => val! ? selectedSet.add(c['code']!) : selectedSet.remove(c['code'])),
                             title: Text(c['name']!),
-                            secondary: Text(_countryCodeToEmoji(c['code']!), style: const TextStyle(fontSize: 24)),
+                            secondary: buildFlag(c['code']!, width: 45, height: 30),
                           );
                         },
                       ),
@@ -424,7 +431,7 @@ class _HomePageState extends State<HomePage> {
                 : Expanded(
                     child: InteractiveViewer(
                       transformationController: _transformationController,
-                      maxScale: 10.0,
+                      maxScale: 20.0,
                       minScale: 4.0,
                       
                       // REMOVIDO O CENTER DAQUI PARA O ZOOM FUNCIONAR
@@ -485,7 +492,7 @@ class _HomePageState extends State<HomePage> {
           final entry = filtered[index];
           final visited = SessionManager().getVisitedCountriesForCurrentUser().contains(entry.key);
           return ListTile(
-            leading: SizedBox(width: 40, height: 25, child: country_flags.CountryFlag.fromCountryCode(entry.key)),
+            leading: buildFlag(entry.key),
             title: Text(entry.value),
             trailing: Icon(visited ? Icons.check_circle : Icons.circle_outlined, color: visited ? Colors.green : Colors.grey),
             onTap: () => _showCountryInfoSheet(context, entry.key, entry.value),
@@ -494,4 +501,5 @@ class _HomePageState extends State<HomePage> {
       ),
     );
   }
+
 }

@@ -7,9 +7,125 @@ import '../session_manager.dart';
 import '../country_names.dart';
 import '../country_photo_manager.dart';
 
+// --- NOVO WIDGET PARA O VISUALIZADOR COM SWIPE ---
+class PhotoViewPage extends StatefulWidget {
+  final List<File> photos;
+  final int initialIndex;
+  final String countryCode;
+  final String? folderName;
+  final CountryPhotoManager photoManager;
+
+  const PhotoViewPage({
+    super.key,
+    required this.photos,
+    required this.initialIndex,
+    required this.countryCode,
+    this.folderName,
+    required this.photoManager,
+  });
+
+  @override
+  State<PhotoViewPage> createState() => _PhotoViewPageState();
+}
+
+class _PhotoViewPageState extends State<PhotoViewPage> {
+  late PageController _pageController;
+  late int _currentIndex;
+  late List<File> _localPhotos; // Cópia local para atualizar a UI ao apagar
+
+  @override
+  void initState() {
+    super.initState();
+    _currentIndex = widget.initialIndex;
+    _localPhotos = List.from(widget.photos);
+    _pageController = PageController(initialPage: widget.initialIndex);
+  }
+
+  Future<void> _deleteCurrentPhoto() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Photo'),
+        content: const Text('Are you sure you want to delete this photo?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      final photoToDelete = _localPhotos[_currentIndex];
+      
+      try {
+        await widget.photoManager.removePhotos(
+          widget.countryCode,
+          [photoToDelete],
+          folderName: widget.folderName,
+        );
+
+        setState(() {
+          _localPhotos.removeAt(_currentIndex);
+          // Se não houver mais fotos, fecha o visualizador
+          if (_localPhotos.isEmpty) {
+            Navigator.pop(context);
+          } else {
+            // Ajusta o índice se apagarmos a última foto
+            if (_currentIndex >= _localPhotos.length) {
+              _currentIndex = _localPhotos.length - 1;
+            }
+          }
+        });
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Photo deleted')),
+        );
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error deleting: $e')),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        iconTheme: const IconThemeData(color: Colors.white),
+        title: Text('${_currentIndex + 1} / ${_localPhotos.length}', 
+                   style: const TextStyle(color: Colors.white)),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
+            onPressed: _deleteCurrentPhoto,
+          ),
+        ],
+      ),
+      body: PageView.builder(
+        controller: _pageController,
+        itemCount: _localPhotos.length,
+        onPageChanged: (index) => setState(() => _currentIndex = index),
+        itemBuilder: (context, index) {
+          return InteractiveViewer(
+            child: Center(
+              child: Image.file(_localPhotos[index], fit: BoxFit.contain),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+// --- CLASSE GALLERY PAGE ATUALIZADA ---
 class GalleryPage extends StatefulWidget {
   final VoidCallback? onBackPressed;
-
   const GalleryPage({super.key, this.onBackPressed});
 
   @override
@@ -19,26 +135,34 @@ class GalleryPage extends StatefulWidget {
 class _GalleryPageState extends State<GalleryPage> {
   final ImagePicker _imagePicker = ImagePicker();
   final CountryPhotoManager _photoManager = CountryPhotoManager();
-  
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = "";
+
   final Map<String, bool> _selectionMode = {};
   final Map<String, Set<String>> _selectedIndices = {};
 
   @override
   void initState() {
     super.initState();
-    // Carregar dados iniciais de todos os países visitados
     WidgetsBinding.instance.addPostFrameCallback((_) => _preloadData());
   }
 
   Future<void> _preloadData() async {
     final visited = SessionManager().getVisitedCountriesForCurrentUser();
     for (var code in visited) {
-      // IMPORTANTE: loadCountryData agora deve ser async para ler do Firestore
       await _photoManager.loadCountryData(code);
     }
     if (mounted) setState(() {});
   }
 
+  List<String> _getFilteredCountries() {
+    final visited = SessionManager().getVisitedCountriesForCurrentUser();
+    final sorted = visited.toList()..sort((a, b) => getCountryName(a).compareTo(getCountryName(b)));
+    if (_searchQuery.isEmpty) return sorted;
+    return sorted.where((code) => getCountryName(code).toLowerCase().contains(_searchQuery.toLowerCase())).toList();
+  }
+
+  // ... (As funções _uploadForCountry e _deleteSelected mantêm-se iguais à versão anterior)
   Future<void> _uploadForCountry(String countryCode) async {
     try {
       final createFolder = await showDialog<bool>(
@@ -75,65 +199,60 @@ class _GalleryPageState extends State<GalleryPage> {
       final List<XFile>? picked = await _imagePicker.pickMultiImage();
       if (picked != null && picked.isNotEmpty) {
         final files = picked.map((x) => File(x.path)).toList();
-        
-        // ADICIONADO AWAIT AQUI
         await _photoManager.addPhotos(countryCode, files, folderName: folderName);
-        
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Added ${files.length} photo(s)')),
-          );
-        }
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Added ${files.length} photo(s)')));
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
-      }
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
     }
   }
 
   Future<void> _deleteSelected(String countryCode) async {
-    final selected = _selectedIndices[countryCode];
-    if (selected == null || selected.isEmpty) return;
+    final selectedKeys = _selectedIndices[countryCode];
+    if (selectedKeys == null || selectedKeys.isEmpty) return;
 
-    // Mostrar carregamento simples ou desativar botões
-    setState(() => _selectionMode[countryCode] = false); 
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Photos'),
+        content: Text('Are you sure you want to delete ${selectedKeys.length} photo(s)?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Delete', style: const TextStyle(color: Colors.red))),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
 
     final Map<String, List<File>> byFolder = {};
-    for (final s in selected) {
-      final parts = s.split('::');
+    for (final key in selectedKeys) {
+      final parts = key.split('::');
       final folder = parts[0];
       final idx = int.parse(parts[1]);
       final photos = folder.isEmpty 
           ? _photoManager.getPhotos(countryCode) 
           : _photoManager.getPhotosInFolder(countryCode, folder);
-      byFolder.putIfAbsent(folder, () => []).add(photos[idx]);
+      if (idx < photos.length) byFolder.putIfAbsent(folder, () => []).add(photos[idx]);
     }
 
     try {
       for (final entry in byFolder.entries) {
-        // MUDADO: Agora espera a remoção no Firestore
-        await _photoManager.removePhotos(
-          countryCode, 
-          entry.value, 
-          folderName: entry.key.isEmpty ? null : entry.key
-        );
+        await _photoManager.removePhotos(countryCode, entry.value, folderName: entry.key.isEmpty ? null : entry.key);
       }
-      _selectedIndices[countryCode]?.clear();
+      setState(() {
+        _selectedIndices[countryCode]?.clear();
+        _selectionMode[countryCode] = false;
+      });
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Delete error: $e')));
     }
-    
-    if (mounted) setState(() {});
   }
-
 
   void _toggleSelectionMode(String countryCode, bool? value) {
     setState(() {
       _selectionMode[countryCode] = value ?? !( _selectionMode[countryCode] ?? false);
-      if (!(_selectionMode[countryCode] ?? false)) {
-        _selectedIndices[countryCode]?.clear();
-      }
+      if (!(_selectionMode[countryCode] ?? false)) _selectedIndices[countryCode]?.clear();
     });
   }
 
@@ -147,115 +266,129 @@ class _GalleryPageState extends State<GalleryPage> {
 
   @override
   Widget build(BuildContext context) {
-    final visited = SessionManager().getVisitedCountriesForCurrentUser();
-    if (visited.isEmpty) {
-      return Scaffold(
-        appBar: AppBar(
-          title: const Text('Gallery'),
-          leading: widget.onBackPressed != null
-              ? IconButton(
-                  icon: const Icon(Icons.arrow_back),
-                  onPressed: widget.onBackPressed,
-                )
-              : null,
-        ),
-        body: const Center(child: Text('No visited countries yet.')),
-      );
-    }
-
-    final sorted = visited.toList()..sort((a, b) => getCountryName(a).compareTo(getCountryName(b)));
-
+    final filteredCountries = _getFilteredCountries();
     return Scaffold(
       appBar: AppBar(
         title: const Text('Gallery'),
         leading: widget.onBackPressed != null
-            ? IconButton(
-                icon: const Icon(Icons.arrow_back),
-                onPressed: widget.onBackPressed,
-              )
+            ? IconButton(icon: const Icon(Icons.arrow_back), onPressed: widget.onBackPressed)
             : null,
       ),
-      body: ListView.builder(
-        padding: const EdgeInsets.all(12),
-        itemCount: sorted.length,
-        itemBuilder: (context, index) {
-          final code = sorted[index];
-          final name = getCountryName(code);
-
-          return Card(
-            margin: const EdgeInsets.symmetric(vertical: 8),
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      SizedBox(width: 48, height: 32, child: country_flags.CountryFlag.fromCountryCode(code)),
-                      const SizedBox(width: 12),
-                      Expanded(child: Text(name, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold))),
-                      
-                      if (_selectionMode[code] ?? false) ...[
-                        IconButton(onPressed: () => _deleteSelected(code), icon: const Icon(Icons.delete, color: Colors.red)),
-                        IconButton(onPressed: () => _toggleSelectionMode(code, false), icon: const Icon(Icons.close)),
-                      ] else ...[
-                        IconButton(
-                          onPressed: () => _uploadForCountry(code), 
-                          icon: const Icon(Icons.add_a_photo, color: Color(0xff6c63ff))
-                        ),
-                        IconButton(
-                          onPressed: () async {
-                            final currentNote = _photoManager.getNote(code) ?? '';
-                            final controller = TextEditingController(text: currentNote);
-                            final result = await showDialog<String>(
-                              context: context,
-                              builder: (context) => AlertDialog(
-                                title: const Text('Country Note'),
-                                content: TextField(controller: controller, maxLines: 3),
-                                actions: [
-                                  TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-                                  ElevatedButton(onPressed: () => Navigator.pop(context, controller.text), child: const Text('Save')),
-                                ],
-                              ),
-                            );
-                            if (result != null) await _photoManager.setNote(code, result);
-                          },
-                          icon: const Icon(Icons.edit_note),
-                        ),
-                      ],
-                    ],
-                  ),
-                  
-                  // LISTENER DE NOTAS
-                  ValueListenableBuilder<String?>(
-                    valueListenable: _photoManager.getNoteNotifier(code),
-                    builder: (context, note, _) {
-                      if (note == null || note.isEmpty) return const SizedBox.shrink();
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                        child: Text(note, style: const TextStyle(fontStyle: FontStyle.italic)),
-                      );
-                    },
-                  ),
-
-                  // LISTENER DE FOLDERS E FOTOS
-                  ValueListenableBuilder<List<String>>(
-                    valueListenable: _photoManager.getFolderListNotifier(code),
-                    builder: (context, folders, _) {
-                      return Column(
-                        children: [
-                          for (final folder in folders) _buildFolderTile(code, folder),
-                          _buildRootPhotos(code),
-                        ],
-                      );
-                    },
-                  ),
-                ],
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: TextField(
+              controller: _searchController,
+              onChanged: (val) => setState(() => _searchQuery = val),
+              decoration: InputDecoration(
+                hintText: 'Search country...',
+                prefixIcon: const Icon(Icons.search),
+                suffixIcon: _searchQuery.isNotEmpty 
+                    ? IconButton(icon: const Icon(Icons.clear), onPressed: () { _searchController.clear(); setState(() => _searchQuery = ""); }) 
+                    : null,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(30)),
               ),
             ),
-          );
-        },
+          ),
+          Expanded(
+            child: ListView.builder(
+              padding: const EdgeInsets.all(12),
+              itemCount: filteredCountries.length,
+              itemBuilder: (context, index) {
+                final code = filteredCountries[index];
+                return _buildCountryCard(code, getCountryName(code));
+              },
+            ),
+          ),
+        ],
       ),
+    );
+  }
+
+  // --- MÉTODOS DE CONSTRUÇÃO DE UI ---
+
+  Widget _buildCountryCard(String code, String name) {
+    return Card(
+      margin: const EdgeInsets.symmetric(vertical: 8),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                SizedBox(width: 48, height: 32, child: country_flags.CountryFlag.fromCountryCode(code)),
+                const SizedBox(width: 12),
+                Expanded(child: Text(name, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold))),
+                _buildActionButtons(code),
+              ],
+            ),
+            _buildNote(code),
+            _buildFoldersAndPhotos(code),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildActionButtons(String code) {
+    if (_selectionMode[code] ?? false) {
+      return Row(
+        children: [
+          IconButton(onPressed: () => _deleteSelected(code), icon: const Icon(Icons.delete, color: Colors.red)),
+          IconButton(onPressed: () => _toggleSelectionMode(code, false), icon: const Icon(Icons.close)),
+        ],
+      );
+    }
+    return Row(
+      children: [
+        IconButton(onPressed: () => _uploadForCountry(code), icon: const Icon(Icons.add_a_photo, color: Color(0xff6c63ff))),
+        IconButton(onPressed: () => _showNoteDialog(code), icon: const Icon(Icons.edit_note)),
+      ],
+    );
+  }
+
+  Future<void> _showNoteDialog(String code) async {
+    final controller = TextEditingController(text: _photoManager.getNote(code) ?? '');
+    final result = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Country Note'),
+        content: TextField(controller: controller, maxLines: 3),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          ElevatedButton(onPressed: () => Navigator.pop(context, controller.text), child: const Text('Save')),
+        ],
+      ),
+    );
+    if (result != null) await _photoManager.setNote(code, result);
+  }
+
+  Widget _buildNote(String code) {
+    return ValueListenableBuilder<String?>(
+      valueListenable: _photoManager.getNoteNotifier(code),
+      builder: (context, note, _) {
+        if (note == null || note.isEmpty) return const SizedBox.shrink();
+        return Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Text(note, style: const TextStyle(fontStyle: FontStyle.italic)),
+        );
+      },
+    );
+  }
+
+  Widget _buildFoldersAndPhotos(String code) {
+    return ValueListenableBuilder<List<String>>(
+      valueListenable: _photoManager.getFolderListNotifier(code),
+      builder: (context, folders, _) {
+        return Column(
+          children: [
+            for (final folder in folders) _buildFolderTile(code, folder),
+            _buildRootPhotos(code),
+          ],
+        );
+      },
     );
   }
 
@@ -296,12 +429,18 @@ class _GalleryPageState extends State<GalleryPage> {
       itemBuilder: (context, i) {
         final isSelected = _selectedIndices[code]?.contains('$folder::$i') ?? false;
         return GestureDetector(
+          onLongPress: () => _toggleSelectionMode(code, true),
           onTap: () {
             if (isSelecting) {
               _toggleSelectIndex(code, folder, i);
             } else {
-              // Zoom da imagem
-              showDialog(context: context, builder: (_) => Dialog(child: InteractiveViewer(child: Image.file(photos[i]))));
+              // --- ABRIR O NOVO VISUALIZADOR COM SWIPE ---
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => PhotoViewPage(photos: photos, initialIndex: i, countryCode: code, folderName: folder.isEmpty ? null : folder, photoManager: _photoManager),
+                ),
+              );
             }
           },
           child: Stack(
@@ -318,5 +457,11 @@ class _GalleryPageState extends State<GalleryPage> {
         );
       },
     );
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 }

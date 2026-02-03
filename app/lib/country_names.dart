@@ -1,3 +1,6 @@
+import 'package:flutter/material.dart';
+import 'package:country_flags/country_flags.dart' as country_flags;
+
 /// Small utility map and getter for country code -> country name.
 const Map<String, String> countryNames = {
   'AF': 'Afghanistan', 'AL': 'Albania', 'DZ': 'Algeria', 'AD': 'Andorra',
@@ -10,7 +13,7 @@ const Map<String, String> countryNames = {
   'KH': 'Cambodia', 'CM': 'Cameroon', 'CA': 'Canada', 'CV': 'Cape Verde',
   'CF': 'Central African Republic', 'TD': 'Chad', 'CL': 'Chile', 'CN': 'China',
   'CO': 'Colombia', 'KM': 'Comoros', 'CG': 'Congo', 'CR': 'Costa Rica',
-  'HR': 'Croatia', 'CU': 'Cuba', 'CY': 'Cyprus', 'CZ': 'Czech Republic',
+  'HR': 'Croatia', 'CU': 'Cuba', 'CY': 'Cyprus', 'CZ': 'Czechia',
   'CD': 'Democratic Republic of the Congo', 'DK': 'Denmark', 'DJ': 'Djibouti',
   'DM': 'Dominica', 'DO': 'Dominican Republic', 'EC': 'Ecuador', 'EG': 'Egypt',
   'SV': 'El Salvador', 'GQ': 'Equatorial Guinea', 'ER': 'Eritrea', 'EE': 'Estonia',
@@ -27,7 +30,7 @@ const Map<String, String> countryNames = {
   'LB': 'Lebanon', 'LS': 'Lesotho', 'LR': 'Liberia', 'LY': 'Libya',
   'LI': 'Liechtenstein', 'LT': 'Lithuania', 'LU': 'Luxembourg', 'MG': 'Madagascar',
   'MW': 'Malawi', 'MY': 'Malaysia', 'MV': 'Maldives', 'ML': 'Mali',
-  'MT': 'Malta', 'MH': 'Marshall Islands', 'MR': 'Mauritania', 'MU': 'Mauritius',
+  'MT': 'Malta', 'MH': 'Marshall Islands','MK' : 'North Macedonia', 'MR': 'Mauritania', 'MU': 'Mauritius',
   'MX': 'Mexico', 'FM': 'Micronesia', 'MD': 'Moldova', 'MC': 'Monaco',
   'MN': 'Mongolia', 'ME': 'Montenegro', 'MA': 'Morocco', 'MZ': 'Mozambique',
   'MM': 'Myanmar', 'NA': 'Namibia', 'NR': 'Nauru', 'NP': 'Nepal',
@@ -57,4 +60,27 @@ String getCountryName(String code) {
   if (code.isEmpty) return code;
   final key = code.toUpperCase();
   return countryNames[key] ?? code;
+}
+
+
+  Widget buildFlag(String code, {double width = 40, double height = 25}) {
+  if (code.toUpperCase() == 'XK') {
+    return Container(
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Center(
+        child: 
+         Center(child: Image.asset('assets/images/Flag_of_Kosovo.svg.webp', fit: BoxFit.cover)),
+      ),
+    );
+  }
+  return SizedBox(
+    width: width,
+    height: height,
+    child: country_flags.CountryFlag.fromCountryCode(code),
+  );
 }
