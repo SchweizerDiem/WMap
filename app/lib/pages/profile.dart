@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:country_flags/country_flags.dart' as country_flags;
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import 'package:flutter/services.dart';
@@ -29,9 +28,7 @@ class _ProfilePageState extends State<ProfilePage> {
 
   Future<void> _pickImageFromGallery() async {
     try {
-      final XFile? pickedFile = await _imagePicker.pickImage(
-        source: ImageSource.gallery,
-      );
+      final XFile? pickedFile = await _imagePicker.pickImage(source: ImageSource.gallery);
       if (pickedFile != null) {
         _profileManager.setProfileImage(File(pickedFile.path));
       }
@@ -50,272 +47,139 @@ class _ProfilePageState extends State<ProfilePage> {
       appBar: AppBar(
         title: const Text('Profile'),
         leading: widget.onBackPressed != null
-            ? IconButton(
-                icon: const Icon(Icons.arrow_back),
-                onPressed: widget.onBackPressed,
-              )
+            ? IconButton(icon: const Icon(Icons.arrow_back), onPressed: widget.onBackPressed)
             : null,
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24.0),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            const SizedBox(height: 8),
-            // Profile photo button with camera overlay
-            GestureDetector(
-              onTap: _pickImageFromGallery,
-              child: ValueListenableBuilder<File?>(
-                valueListenable: _profileManager.profileImageNotifier,
-                builder: (context, profileImage, child) {
-                  if (profileImage != null) {
-                    return Stack(
-                      children: [
-                        CircleAvatar(
-                          radius: 48,
-                          backgroundImage: FileImage(profileImage),
-                        ),
-                        Positioned(
-                          bottom: 0,
-                          right: 0,
-                          child: Container(
-                            width: 32,
-                            height: 32,
-                            decoration: BoxDecoration(
-                              color: Colors.blue,
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                color: Colors.white,
-                                width: 2,
-                              ),
-                            ),
-                            child: const Icon(
-                              Icons.camera_alt,
-                              color: Colors.white,
-                              size: 16,
-                            ),
-                          ),
-                        ),
-                      ],
-                    );
-                  }
-                  return Stack(
+            // --- CABEÇALHO CENTRADO (Nome e Bandeiras em linha) ---
+            Center(
+              child: Wrap(
+                alignment: WrapAlignment.center,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  GestureDetector(
+                    onTap: _pickImageFromGallery,
+                    child: ValueListenableBuilder<File?>(
+                      valueListenable: _profileManager.profileImageNotifier,
+                      builder: (context, profileImage, child) {
+                        return CircleAvatar(
+                          radius: 40,
+                          backgroundColor: Colors.grey[300],
+                          backgroundImage: profileImage != null ? FileImage(profileImage) : null,
+                          child: profileImage == null ? const Icon(Icons.person, size: 40, color: Colors.white) : null,
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 20),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      const CircleAvatar(
-                        radius: 48,
-                        backgroundColor: Colors.grey,
-                        child: Icon(
-                          Icons.person,
-                          size: 48,
-                          color: Colors.white,
-                        ),
-                      ),
-                      Positioned(
-                        bottom: 0,
-                        right: 0,
-                        child: Container(
-                          width: 32,
-                          height: 32,
-                          decoration: BoxDecoration(
-                            color: Colors.blue,
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: Colors.white,
-                              width: 2,
+                      Wrap(
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          ValueListenableBuilder<String>(
+                            valueListenable: userNameNotifier,
+                            builder: (context, name, child) => Text(
+                              name.isEmpty ? 'Guest' : name,
+                              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
                             ),
                           ),
-                          child: const Icon(
-                            Icons.camera_alt,
-                            color: Colors.white,
-                            size: 16,
-                          ),
-                        ),
+                          const SizedBox(width: 8),
+                          Builder(builder: (context) {
+                            final user = SessionManager().getCurrentUser();
+                            final nationalities = user?.nationalities ?? [];
+                            return Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: nationalities.map((code) {
+                                String displayCode = code.toUpperCase();
+                                if (displayCode == 'KO' || displayCode == 'KOS') displayCode = 'XK';
+                                return Padding(
+                                  padding: const EdgeInsets.only(right: 4),
+                                  child: buildFlag(displayCode, width: 22, height: 16),
+                                );
+                              }).toList(),
+                            );
+                          }),
+                        ],
                       ),
+                      Builder(builder: (context) {
+                        final code = SessionManager().getCurrentUser()?.friendCode ?? '---';
+                        return Text(code, style: TextStyle(color: Colors.grey[600], fontWeight: FontWeight.w600));
+                      }),
                     ],
-                  );
-                },
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 16),
-            // Name (listens to userNameNotifier)
-            ValueListenableBuilder<String>(
-              valueListenable: userNameNotifier,
-              builder: (context, name, child) {
-                return Text(
-                  name.isEmpty ? 'Guest' : name,
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                  ),
-                );
-              },
-            ),
-            const SizedBox(height: 24),
-            const SizedBox(height: 4),
-            Builder(
-              builder: (context) {
-                // Obtemos o código do utilizador atual através do SessionManager
-                final friendCode = SessionManager().getCurrentUser()?.friendCode ?? '---';
-                
-                return InkWell(
-                  onTap: () {
-                    // Copia o código para o clipboard
-                    Clipboard.setData(ClipboardData(text: friendCode));
-                    // Mostra um aviso rápido ao utilizador
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Friend code copied to clipboard!'),
-                        duration: Duration(seconds: 2),
-                      ),
-                    );
-                  },
-                  borderRadius: BorderRadius.circular(8),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          friendCode,
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.blueGrey[600],
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: 1.2,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Icon(Icons.copy, size: 16, color: Colors.blueGrey[400]),
-                      ],
-                    ),
-                  ),
-                );
-              },
-            ),
+            const Divider(height: 40),
 
-            const Divider(),
-            const SizedBox(height: 16),
-            // Stats with real visited count
+            // --- PAÍSES VISITADOS (Cálculo consolidado) ---
+            // Usamos o visitadoCountNotifier mas recalculamos com nacionalidades para ser preciso
             ValueListenableBuilder<int>(
               valueListenable: SessionManager().visitedCountNotifier,
-              builder: (context, visitedCount, child) {
-                const int totalCountries = 250;
-                final percent = (visitedCount / totalCountries * 100);
+              builder: (context, count, _) {
+                final user = SessionManager().getCurrentUser();
+                final Set<String> allVisited = {
+                  ...(user?.nationalities ?? []),
+                  ...(user?.visitedCountries ?? []),
+                };
+                
+                final int totalVisitedCount = allVisited.length;
+                final double percentValue = (totalVisitedCount / 250).clamp(0.0, 1.0);
+
                 return Column(
                   children: [
-                    // Large summary card for countries visited
                     Card(
                       elevation: 2,
+                      clipBehavior: Clip.antiAlias,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      child: Padding(
-                        padding: const EdgeInsets.all(12.0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Align(
-                              alignment: Alignment.center,
-                              child: Text(
-                                'Countries Visited',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(fontSize: 25, fontWeight: FontWeight.bold),
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            Center(
-                              child: Text(
-                                '$visitedCount / $totalCountries',
-                                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            // Dropdown / expansion to show visited country list
-                            ExpansionTile(
-                            title: const Text('Show visited countries'),
-                            children: [
-                              Builder(builder: (context) {
-                                // CORREÇÃO AQUI: Aceder ao Set via currentUser
-                                final user = SessionManager().getCurrentUser();
-                                final codes = user?.visitedCountries ?? {};
-                                
-                                if (codes.isEmpty) {
-                                  return const Padding(
-                                    padding: EdgeInsets.all(12.0),
-                                    child: Text('No countries visited yet.'),
-                                  );
-                                }
-                                return Column(
-                                  children: codes.map((code) {
-                                    final name = getCountryName(code);
-                                    return ListTile(
-                                      leading: SizedBox(
-                                        width: 40,
-                                        height: 24,
-                                        child: country_flags.CountryFlag.fromCountryCode(code),
-                                      ),
-                                      title: Text(name),
-                                      subtitle: Text(code.toUpperCase()),
-                                    );
-                                  }).toList(),
+                      child: ExpansionTile(
+                        title: const Text('Countries Visited', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                        subtitle: Text('$totalVisitedCount / 250'),
+                        children: [
+                          if (allVisited.isEmpty)
+                            const ListTile(title: Text('No countries visited yet.'))
+                          else
+                            Column(
+                              children: allVisited.map((code) {
+                                String displayCode = code.toUpperCase();
+                                if (displayCode == 'KO' || displayCode == 'KOS') displayCode = 'XK';
+
+                                return ListTile(
+                                  leading: buildFlag(displayCode, width: 32, height: 22),
+                                  title: Text(getCountryName(displayCode)),
+                                  subtitle: Text(displayCode),
                                 );
-                              }),
-                            ],
-                          ),
-                          ],
-                        ),
+                              }).toList(),
+                            ),
+                        ],
                       ),
                     ),
-                    const SizedBox(height: 12),
-                    // Percentage card: title + animated progress bar underneath
+                    const SizedBox(height: 16),
+                    // --- PERCENTAGEM ---
                     Card(
                       elevation: 2,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       child: Padding(
-                        padding: const EdgeInsets.all(12.0),
+                        padding: const EdgeInsets.all(16),
                         child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
-                            const Align(
-                              alignment: Alignment.center,
-                              child: Text(
-                                'Percentage of World Visited',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                              ),
-                            ),
+                            const Text('World Exploration', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
                             const SizedBox(height: 12),
-                            TweenAnimationBuilder<double>(
-                              tween: Tween<double>(begin: 0.0, end: (percent / 100).clamp(0.0, 1.0)),
-                              duration: const Duration(milliseconds: 700),
-                              curve: Curves.easeOutCubic,
-                              builder: (context, animatedValue, child) {
-                                final primary = Theme.of(context).colorScheme.primary;
-                                final displayedPercent = (animatedValue * 100).clamp(0.0, 100.0);
-                                return Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    ClipRRect(
-                                      borderRadius: BorderRadius.circular(8),
-                                      child: SizedBox(
-                                        width: double.infinity,
-                                        child: LinearProgressIndicator(
-                                          value: animatedValue,
-                                          minHeight: 16,
-                                          color: primary,
-                                          backgroundColor: Theme.of(context).colorScheme.onSurface.withOpacity(0.12),
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(height: 8),
-                                    Text(
-                                      '${displayedPercent.toStringAsFixed(1)}%',
-                                      style: TextStyle(
-                                        color: Theme.of(context).textTheme.bodyMedium?.color,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ],
-                                );
-                              },
+                            LinearProgressIndicator(
+                              value: percentValue,
+                              minHeight: 12,
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              '${(percentValue * 100).toStringAsFixed(1)}%',
+                              style: const TextStyle(fontWeight: FontWeight.w600),
                             ),
                           ],
                         ),
@@ -325,65 +189,40 @@ class _ProfilePageState extends State<ProfilePage> {
                 );
               },
             ),
-            const SizedBox(height: 24),
-            // Large summary card for planned (to-visit) countries (same style as visited)
+
+            const SizedBox(height: 16),
+
+            // --- FUTURE TRIPS ---
             ValueListenableBuilder<int>(
               valueListenable: SessionManager().plannedCountNotifier,
-              builder: (context, plannedCount, child) {
+              builder: (context, count, _) {
+                final user = SessionManager().getCurrentUser();
+                final codes = user?.plannedCountries.toList() ?? [];
+
                 return Card(
                   elevation: 2,
+                  clipBehavior: Clip.antiAlias,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  child: Padding(
-                    padding: const EdgeInsets.all(12.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Align(
-                          alignment: Alignment.center,
-                          child: Text(
-                            'Future Trips',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(fontSize: 25, fontWeight: FontWeight.bold),
-                          ),
+                  child: ExpansionTile(
+                    title: const Text('Future Trips', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                    subtitle: Text('$count countries planned'),
+                    children: [
+                      if (codes.isEmpty)
+                        const ListTile(title: Text('No planned countries.'))
+                      else
+                        Column(
+                          children: codes.map((code) {
+                            String displayCode = code.toUpperCase();
+                            if (displayCode == 'KO' || displayCode == 'KOS') displayCode = 'XK';
+
+                            return ListTile(
+                              leading: buildFlag(displayCode, width: 32, height: 22),
+                              title: Text(getCountryName(displayCode)),
+                              subtitle: Text(displayCode),
+                            );
+                          }).toList(),
                         ),
-                                const SizedBox(height: 12),
-                                // Center the planned count and show only the number
-                                Center(
-                                  child: Text(
-                                    '$plannedCount',
-                                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
-                                  ),
-                                ),
-                        const SizedBox(height: 8),
-                        ExpansionTile(
-                          title: const Text('Show planned countries'),
-                          children: [
-                            Builder(builder: (context) {
-                              // CORREÇÃO AQUI: Aceder ao Set planeado via currentUser
-                              final user = SessionManager().getCurrentUser();
-                              final codes = user?.plannedCountries ?? {};
-                              
-                              if (codes.isEmpty) {
-                                return const Padding(
-                                  padding: EdgeInsets.all(12.0),
-                                  child: Text('No planned (future) countries.'),
-                                );
-                              }
-                              return Column(
-                                children: codes.map((code) {
-                                  final name = getCountryName(code);
-                                  return ListTile(
-                                    leading: buildFlag(code), // Usa a função que lida com o Kosovo e outros
-                                    title: Text(name),
-                                    subtitle: Text(code.toUpperCase()),
-                                  );
-                                }).toList(),
-                              );
-                            }),
-                          ],
-                        ),
-                      ],
-                    ),
+                    ],
                   ),
                 );
               },
@@ -393,8 +232,4 @@ class _ProfilePageState extends State<ProfilePage> {
       ),
     );
   }
-
-  // Use shared countryNames/getCountryName from ../country_names.dart
-
-  // Planned countries are shown inline in the card above via ExpansionTile.
 }

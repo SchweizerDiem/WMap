@@ -113,8 +113,6 @@ class SessionManager {
     visitedCountNotifier.value = _currentUser!.visitedCountries.length;
     plannedCountNotifier.value = _currentUser!.plannedCountries.length;
     
-    // IMPORTANTE: Isto garante que o nome no topo do perfil e noutras páginas muda
-    userNameNotifier.value = _currentUser!.name; 
     
     debugPrint("User data refreshed: Name is now ${_currentUser!.name}");
   }

@@ -6,9 +6,15 @@ import 'package:countries_world_map/data/maps/world_map.dart';
 import 'package:country_flags/country_flags.dart' as country_flags;
 import 'package:firebase_core/firebase_core.dart';
 import 'dart:convert';
+import 'dart:ui' as ui; // Adicionado para Image
+import 'dart:io'; // Adicionado para File
+import 'package:flutter/rendering.dart'; // Adicionado para RepaintBoundary
+import 'package:flutter/services.dart'; // Adicionado para ByteData
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart'; 
+import 'package:path_provider/path_provider.dart'; // Adicionado
+import 'package:home_widget/home_widget.dart'; // Adicionado
 
 // Pages
 import './pages/welcome.dart';
@@ -21,8 +27,31 @@ import './pages/gallery.dart';
 import 'session_manager.dart';
 import 'country_names.dart';
 
+// --- FUNÇÕES UTILITÁRIAS GLOBAIS ---
 String normalizeCountryCode(String code) {
   return code.toLowerCase();
+}
+
+Widget buildFlag(String code, {double width = 40, double height = 24}) {
+  final cleanCode = code.toUpperCase();
+  if (cleanCode == 'XK') {
+    return Container(
+      width: width, height: height,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: Colors.grey.shade300, width: 0.5),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(4),
+        child: Image.asset('assets/images/Flag_of_Kosovo.svg.webp', fit: BoxFit.cover),
+      ),
+    );
+  }
+  return SizedBox(
+    width: width, height: height,
+    child: country_flags.CountryFlag.fromCountryCode(cleanCode),
+  );
 }
 
 void main() async {
@@ -34,7 +63,6 @@ void main() async {
     debugPrint("Firebase init error: $e");
   }
 
-  // --- LÓGICA DE ARRANQUE (REMEMBER ME) ---
   final prefs = await SharedPreferences.getInstance();
   final bool rememberMe = prefs.getBool('remember_me') ?? false;
   final user = FirebaseAuth.instance.currentUser;
@@ -42,14 +70,11 @@ void main() async {
   Widget initialScreen;
 
   if (rememberMe && user != null) {
-    // Se quer ser lembrado e está logado, atualiza dados e vai para Home
     await SessionManager().refreshUserData();
     initialScreen = const HomePage();
   } else {
-    // Caso contrário, Welcome Page
     initialScreen = const WelcomePage();
   }
-  // ---------------------------------------
 
   runApp(MyApp(initialScreen: initialScreen));
 }
@@ -62,11 +87,8 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'WMap',
-      theme: ThemeData(
-        primarySwatch: Colors.blue,
-        useMaterial3: true,
-      ),
-      home: initialScreen, // Define a página inicial dinamicamente
+      theme: ThemeData(primarySwatch: Colors.blue, useMaterial3: true),
+      home: initialScreen,
       routes: {
         '/home': (context) => const HomePage(),
         '/login': (context) => const LoginPage(),
@@ -78,7 +100,6 @@ class MyApp extends StatelessWidget {
   }
 }
 
-
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
 
@@ -87,26 +108,26 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
+  bool _isUpdatingWidget = false;
   int currentPageIndex = 0;
   final TextEditingController _searchController = TextEditingController();
   final TransformationController _transformationController = TransformationController();
+  final GlobalKey _mapKey = GlobalKey(); // Chave para capturar o mapa
   Set<String> _nationalityCountries = <String>{};
 
   @override
   void initState() {
     super.initState();
 
-    // EXECUTAR O ZOOM APÓS O MAPA ESTAR MONTADO
-   WidgetsBinding.instance.addPostFrameCallback((_) {
-    if (mounted) {
-      setState(() {
-        
-        _transformationController.value = Matrix4.identity()
-          ..scale(4.0) 
-          ..translate(-150.0, -210.0, 0.0); 
-      });
-    }
-  });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        setState(() {
+          _transformationController.value = Matrix4.identity()
+            ..scale(4.0) 
+            ..translate(-150.0, -210.0, 0.0); 
+        });
+      }
+    });
     
     Future.delayed(Duration.zero, () async {
       final session = SessionManager();
@@ -131,15 +152,88 @@ class _HomePageState extends State<HomePage> {
     super.dispose();
   }
 
-  // --- LÓGICA DA API REST COUNTRIES ---
+  // --- LÓGICA DO WIDGET ---
+  Future<void> _updateWidgetMap() async {
+  if (!mounted) return;
+  
+  try {
+    setState(() => _isUpdatingWidget = true); // Ativa o loading
+
+    final originalMatrix = Matrix4.fromFloat64List(_transformationController.value.storage);
+    _transformationController.value = Matrix4.identity(); // Tira o zoom
+
+    await Future.delayed(const Duration(milliseconds: 250)); // Tempo para o mapa renderizar
+
+    final RenderRepaintBoundary? boundary = _mapKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
+    if (boundary != null) {
+      ui.Image image = await boundary.toImage(pixelRatio: 2.0);
+      ByteData? byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+      if (byteData != null) {
+        final directory = await getApplicationDocumentsDirectory();
+        final imagePath = '${directory.path}/map_snapshot.png';
+        await File(imagePath).writeAsBytes(byteData.buffer.asUint8List());
+        await HomeWidget.saveWidgetData<String>('map_image_path', imagePath);
+        await HomeWidget.updateWidget(name: 'MapWidgetProvider', androidName: 'MapWidgetProvider');
+      }
+    }
+
+    _transformationController.value = originalMatrix; // Volta o zoom original
+    setState(() => _isUpdatingWidget = false); // Tira o loading
+
+  } catch (e) {
+    setState(() => _isUpdatingWidget = false);
+    debugPrint("Erro: $e");
+  }
+
+
+  final session = SessionManager();
+  final visitedCount = session.getVisitedCountriesForCurrentUser().length;
+
+  // 2. Salvar o texto formatado para o widget
+  await HomeWidget.saveWidgetData<String>(
+    'visited_count_text', 
+    'Countries Visited: $visitedCount/250'
+  );
+
+  // 3. Atualizar o widget
+  await HomeWidget.updateWidget(
+    name: 'MapWidgetProvider',
+    androidName: 'MapWidgetProvider',
+  );
+}
+
+  // --- LÓGICA DA API ---
   Future<Map<String, dynamic>?> _fetchCountryData(String code) async {
     try {
       final response = await http.get(Uri.parse('https://restcountries.com/v3.1/alpha/$code'));
       if (response.statusCode == 200) {
         final List<dynamic> data = json.decode(response.body);
         final country = data[0];
+
+        String currencyName = (country['currencies'] as Map?)?.values.first['name'] ?? 'N/A';
+        String currencySymbol = (country['currencies'] as Map?)?.values.first['symbol'] ?? '';
+
+        if (code.toUpperCase() == 'BG') {
+          currencyName = 'Euro';
+          currencySymbol = '€';
+        }
+        
         final List<dynamic>? capitalsList = country['capital'];
         final String capitals = capitalsList != null ? capitalsList.join(', ') : 'N/A';
+        final List<dynamic> timezones = country['timezones'] ?? [];
+
+        String capitalTime = "N/A";
+        String otherTimes = "";
+
+        if (timezones.isNotEmpty) {
+          capitalTime = _calculateTime(timezones.first);
+          if (timezones.length > 1) {
+            otherTimes = timezones.skip(1)
+                .map((tz) => _calculateTime(tz))
+                .toSet() 
+                .join('  •  ');
+          }
+        }
 
         return {
           'capital': capitals,
@@ -147,14 +241,34 @@ class _HomePageState extends State<HomePage> {
           'region': country['region'] ?? 'N/A',
           'subregion': country['subregion'] ?? 'N/A',
           'languages': (country['languages'] as Map?)?.values.join(', ') ?? 'N/A',
-          'currency': (country['currencies'] as Map?)?.values.first['name'] ?? 'N/A',
-          'currencySymbol': (country['currencies'] as Map?)?.values.first['symbol'] ?? '',
+          'currency': currencyName,
+          'currencySymbol': currencySymbol,
+          'capitalTime': capitalTime,
+          'otherTimes': otherTimes,
         };
       }
     } catch (e) {
       debugPrint("API Error: $e");
     }
     return null;
+  }
+
+  String _calculateTime(String timezoneStr) {
+    try {
+      DateTime now = DateTime.now().toUtc();
+      if (timezoneStr == "UTC") return DateFormat('HH:mm').format(now);
+      final String offsetPart = timezoneStr.substring(3); 
+      final bool isNegative = offsetPart.startsWith('-');
+      final cleanOffset = offsetPart.replaceAll('+', '').replaceAll('-', '');
+      final parts = cleanOffset.split(':');
+      int hours = int.parse(parts[0]);
+      int minutes = parts.length > 1 ? int.parse(parts[1]) : 0;
+      Duration offset = Duration(hours: hours, minutes: minutes);
+      DateTime localTime = isNegative ? now.subtract(offset) : now.add(offset);
+      return DateFormat('HH:mm').format(localTime);
+    } catch (e) {
+      return "--:--";
+    }
   }
 
   void _showCountryInfoSheet(BuildContext context, String countryCode, String countryName) {
@@ -173,8 +287,7 @@ class _HomePageState extends State<HomePage> {
             mainAxisSize: MainAxisSize.min,
             children: [
               Container(
-                width: 40,
-                height: 5,
+                width: 40, height: 5,
                 decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(10)),
               ),
               const SizedBox(height: 20),
@@ -183,8 +296,7 @@ class _HomePageState extends State<HomePage> {
                   ClipRRect(
                     borderRadius: BorderRadius.circular(6),
                     child: SizedBox(
-                      width: 70,
-                      height: 45,
+                      width: 70, height: 45,
                       child: countryCode.toUpperCase() == 'XK' 
                         ? Container(color: Colors.white, child: Center(child: Image.asset('assets/images/Flag_of_Kosovo.svg.webp', fit: BoxFit.cover)),):  
                       country_flags.CountryFlag.fromCountryCode(countryCode),
@@ -201,18 +313,12 @@ class _HomePageState extends State<HomePage> {
                 future: _fetchCountryData(countryCode),
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Padding(
-                      padding: EdgeInsets.all(30), 
-                      child: Center(child: CircularProgressIndicator())
-                    );
+                    return const Padding(padding: EdgeInsets.all(30), child: Center(child: CircularProgressIndicator()));
                   }
                   if (snapshot.hasData && snapshot.data != null) {
                     return _buildDetailsGrid(snapshot.data!);
                   }
-                  return const Padding(
-                    padding: EdgeInsets.all(20),
-                    child: Text("Information temporarily unavailable."),
-                  );
+                  return const Padding(padding: EdgeInsets.all(20), child: Text("Information unavailable."));
                 },
               ),
               const SizedBox(height: 25),
@@ -229,6 +335,36 @@ class _HomePageState extends State<HomePage> {
     final f = NumberFormat.compact();
     return Column(
       children: [
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(15),
+          decoration: BoxDecoration(
+            color: const Color(0xff6c63ff).withOpacity(0.1),
+            borderRadius: BorderRadius.circular(15),
+            border: Border.all(color: const Color(0xff6c63ff).withOpacity(0.2)),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.access_time_filled, color: Color(0xff6c63ff), size: 28),
+              const SizedBox(width: 15),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text("LOCAL TIME (CAPITAL)", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xff4841a8))),
+                    Text(data['capitalTime'], style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xff4841a8))),
+                    if (data['otherTimes'].isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Text("Other zones: ${data['otherTimes']}", style: TextStyle(fontSize: 11, color: Colors.grey[600], fontStyle: FontStyle.italic)),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 20),
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -285,10 +421,7 @@ class _HomePageState extends State<HomePage> {
     final isNationality = _nationalityCountries.map((e) => e.toUpperCase()).contains(code.toUpperCase());
 
     if (isNationality) {
-      return const Center(
-        child: Text('🌍 This is your nationality!', 
-        style: TextStyle(fontStyle: FontStyle.italic, color: Colors.blue, fontWeight: FontWeight.bold))
-      );
+      return const Center(child: Text('🌍 This is your nationality!', style: TextStyle(fontStyle: FontStyle.italic, color: Colors.blue, fontWeight: FontWeight.bold)));
     }
 
     return StatefulBuilder(builder: (context, setInternalState) {
@@ -309,6 +442,7 @@ class _HomePageState extends State<HomePage> {
                 await session.toggleVisitedForCurrentUser(code);
                 setInternalState(() {}); 
                 setState(() {}); 
+                Future.delayed(const Duration(milliseconds: 500), () => _updateWidgetMap());
               },
             ),
           ),
@@ -325,6 +459,7 @@ class _HomePageState extends State<HomePage> {
                 await session.togglePlannedForCurrentUser(code);
                 setInternalState(() {});
                 setState(() {});
+                Future.delayed(const Duration(milliseconds: 500), () => _updateWidgetMap());
               },
             ),
           ),
@@ -335,7 +470,6 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _showNationalityPicker() async {
     final countries = countryNames.entries.map((e) => {'code': e.key, 'name': e.value}).toList();
-
     final selected = await showDialog<List<String>>(
       context: context,
       barrierDismissible: false,
@@ -346,36 +480,23 @@ class _HomePageState extends State<HomePage> {
           builder: (context, setState) {
             final query = searchController.text.toLowerCase();
             final filtered = countries.where((c) => c['name']!.toLowerCase().contains(query)).toList();
-
             return AlertDialog(
               title: const Text('Select your nationalities'),
               content: SizedBox(
-                width: double.maxFinite,
-                height: 400,
-                child: Column(
-                  children: [
-                    TextField(
-                      controller: searchController,
-                      onChanged: (_) => setState(() {}),
-                      decoration: InputDecoration(hintText: 'Search...', prefixIcon: const Icon(Icons.search), border: OutlineInputBorder(borderRadius: BorderRadius.circular(20))),
-                    ),
-                    const SizedBox(height: 10),
-                    Expanded(
-                      child: ListView.builder(
-                        itemCount: filtered.length,
-                        itemBuilder: (context, index) {
-                          final c = filtered[index];
-                          return CheckboxListTile(
-                            value: selectedSet.contains(c['code']),
-                            onChanged: (val) => setState(() => val! ? selectedSet.add(c['code']!) : selectedSet.remove(c['code'])),
-                            title: Text(c['name']!),
-                            secondary: buildFlag(c['code']!, width: 45, height: 30),
-                          );
-                        },
-                      ),
-                    ),
-                  ],
-                ),
+                width: double.maxFinite, height: 400,
+                child: Column(children: [
+                  TextField(controller: searchController, onChanged: (_) => setState(() {}), decoration: InputDecoration(hintText: 'Search...', prefixIcon: const Icon(Icons.search), border: OutlineInputBorder(borderRadius: BorderRadius.circular(20)))),
+                  const SizedBox(height: 10),
+                  Expanded(child: ListView.builder(itemCount: filtered.length, itemBuilder: (context, index) {
+                    final c = filtered[index];
+                    return CheckboxListTile(
+                      value: selectedSet.contains(c['code']),
+                      onChanged: (val) => setState(() => val! ? selectedSet.add(c['code']!) : selectedSet.remove(c['code'])),
+                      title: Text(c['name']!),
+                      secondary: buildFlag(c['code']!, width: 45, height: 30),
+                    );
+                  })),
+                ]),
               ),
               actions: [
                 TextButton(onPressed: () => Navigator.pop(context, []), child: const Text('Skip')),
@@ -386,105 +507,114 @@ class _HomePageState extends State<HomePage> {
         );
       },
     );
-
     if (selected != null && selected.isNotEmpty) {
       setState(() { _nationalityCountries = selected.toSet(); });
       await SessionManager().updateNationalities(selected);
+      Future.delayed(const Duration(milliseconds: 800), () => _updateWidgetMap());
     }
   }
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: SvgPicture.asset("assets/images/airplane-tilt.svg", width: 40),
-        automaticallyImplyLeading: false,
-      ),
-      bottomNavigationBar: NavigationBar(
-        onDestinationSelected: (int index) => setState(() => currentPageIndex = index),
-        selectedIndex: currentPageIndex,
-        destinations: const <Widget>[
-          NavigationDestination(icon: Icon(Icons.map), label: 'Map'),
-          NavigationDestination(icon: Icon(Icons.people), label: 'Friends'),
-          NavigationDestination(icon: Icon(Icons.image), label: 'Gallery'),
-          NavigationDestination(icon: Icon(Icons.person), label: 'Profile'),
-          NavigationDestination(icon: Icon(Icons.settings), label: 'Settings'),
-        ],
-      ),
-      body: <Widget>[
-        Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(12.0),
-              child: TextField(
-                controller: _searchController,
-                onChanged: (_) => setState(() {}),
-                decoration: InputDecoration(
-                  hintText: 'Search countries...',
-                  prefixIcon: const Icon(Icons.search),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(20)),
+Widget build(BuildContext context) {
+  return Scaffold(
+    appBar: AppBar(
+      title: SvgPicture.asset("assets/images/airplane-tilt.svg", width: 40),
+      automaticallyImplyLeading: false,
+    ),
+    bottomNavigationBar: NavigationBar(
+      onDestinationSelected: (int index) => setState(() => currentPageIndex = index),
+      selectedIndex: currentPageIndex,
+      destinations: const <Widget>[
+        NavigationDestination(icon: Icon(Icons.map), label: 'Map'),
+        NavigationDestination(icon: Icon(Icons.people), label: 'Friends'),
+        NavigationDestination(icon: Icon(Icons.image), label: 'Gallery'),
+        NavigationDestination(icon: Icon(Icons.person), label: 'Profile'),
+        NavigationDestination(icon: Icon(Icons.settings), label: 'Settings'),
+      ],
+    ),
+    body: <Widget>[
+      Stack( // Adicionamos este Stack aqui para o loading flutuar
+        children: [
+          Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(12.0),
+                child: TextField(
+                  controller: _searchController,
+                  onChanged: (_) => setState(() {}),
+                  decoration: InputDecoration(hintText: 'Search countries...', prefixIcon: const Icon(Icons.search), border: OutlineInputBorder(borderRadius: BorderRadius.circular(20))),
+                ),
+              ),
+              _searchController.text.isNotEmpty
+                  ? _buildSearchResults()
+                  : Expanded(
+                      child: RepaintBoundary(
+                        key: _mapKey,
+                        child: InteractiveViewer(
+                          transformationController: _transformationController,
+                          maxScale: 20.0,
+                          minScale: 1.0, // Alterado para 1.0 para o reset de zoom ser total
+                          child: ValueListenableBuilder<int>(
+                            valueListenable: SessionManager().visitedCountNotifier,
+                            builder: (context, visitedCount, child) {
+                              final session = SessionManager();
+                              final user = session.getCurrentUser();
+                              final visited = user?.visitedCountries ?? {};
+                              final planned = user?.plannedCountries ?? {};
+                              final nationalities = user?.nationalities ?? []; 
+                              final Map<String, Color> colorMap = {};
+
+                              for (var code in planned) colorMap[normalizeCountryCode(code)] = const Color.fromARGB(255, 6, 16, 148);
+                              for (var code in visited) colorMap[normalizeCountryCode(code)] = const Color.fromARGB(255, 31, 131, 212);
+                              for (var code in nationalities) colorMap[normalizeCountryCode(code)] = const Color.fromARGB(255, 9, 181, 233);
+
+                              return SimpleMap(
+                                instructions: SMapWorld.instructions,
+                                defaultColor: Colors.grey,
+                                colors: colorMap,
+                                countryBorder: const CountryBorder(color: Colors.black, width: 0.1),
+                                fit: BoxFit.contain,
+                                callback: (id, name, tapdetails) {
+                                  if (id.isNotEmpty) _showCountryInfoSheet(context, id, getCountryName(id));
+                                },
+                              );
+                            },
+                          ),
+                        ),
+                      ),
+                    ),
+            ],
+          ),
+          // SE ESTIVER A ATUALIZAR, MOSTRA ESTE BLOQUEIO
+          if (_isUpdatingWidget)
+            Positioned.fill(
+              child: Container(
+                color: Colors.white.withOpacity(0.9), // Bloqueia a visão do "pulo" do mapa
+                child: const Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      CircularProgressIndicator(),
+                      SizedBox(height: 15),
+                      Text("Updating Widget Map...", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blueGrey)),
+                    ],
+                  ),
                 ),
               ),
             ),
-            _searchController.text.isNotEmpty
-                ? _buildSearchResults()
-                : Expanded(
-                    child: InteractiveViewer(
-                      transformationController: _transformationController,
-                      maxScale: 20.0,
-                      minScale: 4.0,
-                      
-                      // REMOVIDO O CENTER DAQUI PARA O ZOOM FUNCIONAR
-                      child: ValueListenableBuilder<int>(
-                        valueListenable: SessionManager().visitedCountNotifier,
-                        builder: (context, visitedCount, child) {
-                          final session = SessionManager();
-                          final user = session.getCurrentUser();
-                          
-                          final visited = user?.visitedCountries ?? {};
-                          final planned = user?.plannedCountries ?? {};
-                          final nationalities = user?.nationalities ?? []; 
-
-                          final Map<String, Color> colorMap = {};
-
-                          for (var code in planned) {
-                            colorMap[normalizeCountryCode(code)] = const Color.fromARGB(255, 6, 16, 148);
-                          }
-                          for (var code in visited) {
-                            colorMap[normalizeCountryCode(code)] = const Color.fromARGB(255, 31, 131, 212);
-                          }
-                          for (var code in nationalities) {
-                            colorMap[normalizeCountryCode(code)] = const Color.fromARGB(255, 9, 181, 233);
-                          }
-
-                          return SimpleMap(
-                            instructions: SMapWorld.instructions,
-                            defaultColor: Colors.grey,
-                            colors: colorMap,
-                            countryBorder: const CountryBorder(color: Colors.black, width: 0.1),
-                            fit: BoxFit.contain,
-                            callback: (id, name, tapdetails) {
-                              if (id.isNotEmpty) _showCountryInfoSheet(context, id, getCountryName(id));
-                            },
-                          );
-                        },
-                      ),
-                    ),
-                  ),
-          ],
-        ),
-        const FriendsPage(),
-        GalleryPage(onBackPressed: () => setState(() => currentPageIndex = 0)),
-        ProfilePage(onBackPressed: () => setState(() => currentPageIndex = 0)),
-        SettingsPage(onBackPressed: () => setState(() => currentPageIndex = 0)),
-      ][currentPageIndex],
-    );
-  }
+        ],
+      ),
+      const FriendsPage(),
+      GalleryPage(onBackPressed: () => setState(() => currentPageIndex = 0)),
+      ProfilePage(onBackPressed: () => setState(() => currentPageIndex = 0)),
+      SettingsPage(onBackPressed: () => setState(() => currentPageIndex = 0)),
+    ][currentPageIndex],
+  );
+}
 
   Widget _buildSearchResults() {
     final query = _searchController.text.toLowerCase();
     final filtered = countryNames.entries.where((entry) => entry.value.toLowerCase().contains(query)).toList();
-
     return Expanded(
       child: ListView.builder(
         itemCount: filtered.length,
@@ -501,5 +631,4 @@ class _HomePageState extends State<HomePage> {
       ),
     );
   }
-
 }

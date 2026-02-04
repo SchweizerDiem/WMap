@@ -1,7 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:country_flags/country_flags.dart' as country_flags;
 
 import '../session_manager.dart';
 import '../country_names.dart';
@@ -31,7 +30,7 @@ class PhotoViewPage extends StatefulWidget {
 class _PhotoViewPageState extends State<PhotoViewPage> {
   late PageController _pageController;
   late int _currentIndex;
-  late List<File> _localPhotos; // Cópia local para atualizar a UI ao apagar
+  late List<File> _localPhotos;
 
   @override
   void initState() {
@@ -69,11 +68,9 @@ class _PhotoViewPageState extends State<PhotoViewPage> {
 
         setState(() {
           _localPhotos.removeAt(_currentIndex);
-          // Se não houver mais fotos, fecha o visualizador
           if (_localPhotos.isEmpty) {
             Navigator.pop(context);
           } else {
-            // Ajusta o índice se apagarmos a última foto
             if (_currentIndex >= _localPhotos.length) {
               _currentIndex = _localPhotos.length - 1;
             }
@@ -123,7 +120,7 @@ class _PhotoViewPageState extends State<PhotoViewPage> {
   }
 }
 
-// --- CLASSE GALLERY PAGE ATUALIZADA ---
+// --- CLASSE GALLERY PAGE ---
 class GalleryPage extends StatefulWidget {
   final VoidCallback? onBackPressed;
   const GalleryPage({super.key, this.onBackPressed});
@@ -148,21 +145,35 @@ class _GalleryPageState extends State<GalleryPage> {
   }
 
   Future<void> _preloadData() async {
-    final visited = SessionManager().getVisitedCountriesForCurrentUser();
-    for (var code in visited) {
+    final user = SessionManager().getCurrentUser();
+    // Carregar dados de fotos tanto para visitados como para nacionalidades
+    final Set<String> allToLoad = {
+      ...(user?.nationalities ?? []),
+      ...(user?.visitedCountries ?? []),
+    };
+    
+    for (var code in allToLoad) {
       await _photoManager.loadCountryData(code);
     }
     if (mounted) setState(() {});
   }
 
   List<String> _getFilteredCountries() {
-    final visited = SessionManager().getVisitedCountriesForCurrentUser();
-    final sorted = visited.toList()..sort((a, b) => getCountryName(a).compareTo(getCountryName(b)));
+    final user = SessionManager().getCurrentUser();
+    
+    // Une Nacionalidades e Visitados num Set único
+    final Set<String> combined = {
+      ...(user?.nationalities ?? []),
+      ...(user?.visitedCountries ?? []),
+    };
+
+    final List<String> sorted = combined.toList()
+      ..sort((a, b) => getCountryName(a).compareTo(getCountryName(b)));
+
     if (_searchQuery.isEmpty) return sorted;
     return sorted.where((code) => getCountryName(code).toLowerCase().contains(_searchQuery.toLowerCase())).toList();
   }
 
-  // ... (As funções _uploadForCountry e _deleteSelected mantêm-se iguais à versão anterior)
   Future<void> _uploadForCountry(String countryCode) async {
     try {
       final createFolder = await showDialog<bool>(
@@ -306,9 +317,11 @@ class _GalleryPageState extends State<GalleryPage> {
     );
   }
 
-  // --- MÉTODOS DE CONSTRUÇÃO DE UI ---
-
   Widget _buildCountryCard(String code, String name) {
+    // Normalização Kosovo (XK)
+    String displayCode = code.toUpperCase();
+    if (displayCode == 'KO' || displayCode == 'KOS') displayCode = 'XK';
+
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 8),
       child: Padding(
@@ -317,14 +330,15 @@ class _GalleryPageState extends State<GalleryPage> {
           children: [
             Row(
               children: [
-                SizedBox(width: 48, height: 32, child: country_flags.CountryFlag.fromCountryCode(code)),
+                // Corrigido: usando a tua função buildFlag para as bandeiras
+                buildFlag(displayCode, width: 48, height: 32),
                 const SizedBox(width: 12),
                 Expanded(child: Text(name, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold))),
-                _buildActionButtons(code),
+                _buildActionButtons(displayCode),
               ],
             ),
-            _buildNote(code),
-            _buildFoldersAndPhotos(code),
+            _buildNote(displayCode),
+            _buildFoldersAndPhotos(displayCode),
           ],
         ),
       ),
@@ -434,11 +448,16 @@ class _GalleryPageState extends State<GalleryPage> {
             if (isSelecting) {
               _toggleSelectIndex(code, folder, i);
             } else {
-              // --- ABRIR O NOVO VISUALIZADOR COM SWIPE ---
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (_) => PhotoViewPage(photos: photos, initialIndex: i, countryCode: code, folderName: folder.isEmpty ? null : folder, photoManager: _photoManager),
+                  builder: (_) => PhotoViewPage(
+                    photos: photos, 
+                    initialIndex: i, 
+                    countryCode: code, 
+                    folderName: folder.isEmpty ? null : folder, 
+                    photoManager: _photoManager
+                  ),
                 ),
               );
             }
