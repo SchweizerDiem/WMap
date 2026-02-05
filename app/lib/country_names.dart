@@ -53,7 +53,7 @@ const Map<String, String> countryNames = {
   'AE': 'United Arab Emirates', 'GB': 'United Kingdom', 'US': 'United States',
   'UY': 'Uruguay', 'UZ': 'Uzbekistan', 'VU': 'Vanuatu', 'VA': 'Vatican City',
   'VE': 'Venezuela', 'VN': 'Vietnam', 'YE': 'Yemen', 'ZM': 'Zambia',
-  'ZW': 'Zimbabwe', 'XK':'Kosovo',
+  'ZW': 'Zimbabwe', 'XK':'Kosovo', 'EH':'Western Sahara'
 };
 
 String getCountryName(String code) {
@@ -63,7 +63,7 @@ String getCountryName(String code) {
 }
 
 
-  Widget buildFlag(String code, {double width = 40, double height = 25}) {
+Widget buildFlag(String code, {double width = 40, double height = 25}) {
   if (code.toUpperCase() == 'XK') {
     return Container(
       width: width,
@@ -74,7 +74,7 @@ String getCountryName(String code) {
       ),
       child: Center(
         child: 
-         Center(child: Image.asset('assets/images/Flag_of_Kosovo.svg.webp', fit: BoxFit.cover)),
+          Center(child: Image.asset('assets/images/Flag_of_Kosovo.svg.webp', fit: BoxFit.cover)),
       ),
     );
   }

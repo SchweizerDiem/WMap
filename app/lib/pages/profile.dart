@@ -24,6 +24,12 @@ class _ProfilePageState extends State<ProfilePage> {
     super.initState();
     _profileManager = ProfileManager();
     _profileManager.loadProfileImage();
+
+    // --- CORREÇÃO AQUI: Sincronizar o userNameNotifier com o nome real do utilizador ---
+    final currentUser = SessionManager().getCurrentUser();
+    if (currentUser != null && currentUser.name.isNotEmpty) {
+      userNameNotifier.value = currentUser.name;
+    }
   }
 
   Future<void> _pickImageFromGallery() async {
@@ -54,7 +60,7 @@ class _ProfilePageState extends State<ProfilePage> {
         padding: const EdgeInsets.all(24.0),
         child: Column(
           children: [
-            // --- CABEÇALHO CENTRADO (Nome e Bandeiras em linha) ---
+            // --- CABEÇALHO CENTRADO ---
             Center(
               child: Wrap(
                 alignment: WrapAlignment.center,
@@ -82,6 +88,7 @@ class _ProfilePageState extends State<ProfilePage> {
                       Wrap(
                         crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
+                          // Exibe o nome do userNameNotifier (agora sincronizado no initState)
                           ValueListenableBuilder<String>(
                             valueListenable: userNameNotifier,
                             builder: (context, name, child) => Text(
@@ -107,9 +114,43 @@ class _ProfilePageState extends State<ProfilePage> {
                           }),
                         ],
                       ),
+                      const SizedBox(height: 4),
+                      // FRIEND CODE
                       Builder(builder: (context) {
                         final code = SessionManager().getCurrentUser()?.friendCode ?? '---';
-                        return Text(code, style: TextStyle(color: Colors.grey[600], fontWeight: FontWeight.w600));
+                        return InkWell(
+                          onTap: () {
+                            if (code != '---') {
+                              Clipboard.setData(ClipboardData(text: code));
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Friend code $code copied!'),
+                                  behavior: SnackBarBehavior.floating,
+                                  duration: const Duration(seconds: 2),
+                                ),
+                              );
+                            }
+                          },
+                          borderRadius: BorderRadius.circular(4),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 4),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  code,
+                                  style: TextStyle(
+                                    color: Colors.grey[600],
+                                    fontWeight: FontWeight.w600,
+                                    letterSpacing: 1.1,
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                Icon(Icons.copy, size: 14, color: Colors.grey[400]),
+                              ],
+                            ),
+                          ),
+                        );
                       }),
                     ],
                   ),
@@ -118,8 +159,7 @@ class _ProfilePageState extends State<ProfilePage> {
             ),
             const Divider(height: 40),
 
-            // --- PAÍSES VISITADOS (Cálculo consolidado) ---
-            // Usamos o visitadoCountNotifier mas recalculamos com nacionalidades para ser preciso
+            // --- PAÍSES VISITADOS ---
             ValueListenableBuilder<int>(
               valueListenable: SessionManager().visitedCountNotifier,
               builder: (context, count, _) {

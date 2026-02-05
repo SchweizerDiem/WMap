@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import '../user.dart';
+import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 import '../session_manager.dart';
-import '../country_names.dart'; // IMPORTANTE: Para a lista de países
+import '../country_names.dart';
 
 class SettingsPage extends StatefulWidget {
   final VoidCallback? onBackPressed;
@@ -18,7 +18,7 @@ class _SettingsPageState extends State<SettingsPage> {
   @override
   void initState() {
     super.initState();
-    _nameController.text = userNameNotifier.value;
+    _nameController.text = SessionManager().getCurrentUser()?.name ?? '';
   }
 
   @override
@@ -27,7 +27,6 @@ class _SettingsPageState extends State<SettingsPage> {
     super.dispose();
   }
 
-  // Função para converter código em Emoji (copiada para manter autonomia do ficheiro)
   String _countryCodeToEmoji(String countryCode) {
     final code = countryCode.toUpperCase();
     if (code.length != 2) return '';
@@ -37,7 +36,6 @@ class _SettingsPageState extends State<SettingsPage> {
     return String.fromCharCode(first) + String.fromCharCode(second);
   }
 
-  // Lógica do Seletor de Nacionalidades para Definições
   Future<void> _showNationalitySettingsPicker() async {
     final session = SessionManager();
     final user = session.getCurrentUser();
@@ -115,11 +113,8 @@ class _SettingsPageState extends State<SettingsPage> {
       setState(() => _isLoading = true);
       try {
         await session.updateNationalities(selected);
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Nationalities updated!')),
-          );
-        }
+        // Após mudar nacionalidade, voltamos ao mapa para atualizar o widget
+        if (widget.onBackPressed != null) widget.onBackPressed!();
       } finally {
         if (mounted) setState(() => _isLoading = false);
       }
@@ -140,12 +135,11 @@ class _SettingsPageState extends State<SettingsPage> {
       ),
       body: _isLoading 
         ? const Center(child: CircularProgressIndicator()) 
-        : SingleChildScrollView( // Adicionado para evitar overflow
+        : SingleChildScrollView(
             padding: const EdgeInsets.all(16.0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // 1. Secção de Nome
                 Card(
                   child: Padding(
                     padding: const EdgeInsets.all(16.0),
@@ -189,19 +183,34 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
                 const SizedBox(height: 16),
 
-                // 2. NOVA Secção: Gerir Nacionalidades
                 Card(
-                  child: ListTile(
-                    leading: const Icon(Icons.flag_rounded, color: Colors.blue),
-                    title: const Text("Manage Nationalities"),
-                    subtitle: const Text("Add or change your home countries"),
-                    trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-                    onTap: _showNationalitySettingsPicker,
+                  child: Column(
+                    children: [
+                      ListTile(
+                        leading: const Icon(Icons.flag_rounded, color: Colors.blue),
+                        title: const Text("Manage Nationalities"),
+                        subtitle: const Text("Add or change your home countries"),
+                        trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                        onTap: _showNationalitySettingsPicker,
+                      ),
+                      const Divider(height: 1),
+                      ListTile(
+                        leading: const Icon(Icons.palette_outlined, color: Colors.purple),
+                        title: const Text("Map Colors"),
+                        subtitle: const Text("Customize map marker colors"),
+                        trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (context) => MapCustomizationPage(onSave: widget.onBackPressed)),
+                          );
+                        },
+                      ),
+                    ],
                   ),
                 ),
                 const SizedBox(height: 32),
 
-                // 3. Botão Log Out
                 ElevatedButton(
                   onPressed: () async {
                     await SessionManager().logout();
@@ -218,7 +227,6 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
                 const SizedBox(height: 16),
 
-                // 4. Botão Delete Account
                 ElevatedButton(
                   onPressed: () => _confirmDeleteAccount(),
                   style: ElevatedButton.styleFrom(
@@ -233,33 +241,23 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
     );
   }
+
   void _confirmDeleteAccount() {
     showDialog(
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
           title: const Text('Delete Account'),
-          content: const Text(
-            'Are you sure? This will delete all your data and cannot be undone.',
-          ),
+          content: const Text('Are you sure? This will delete all your data and cannot be undone.'),
           actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Cancel'),
-            ),
+            TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
             TextButton(
               onPressed: () async {
                 Navigator.of(context).pop();
                 setState(() => _isLoading = true);
-                
-                // NOTA: No Firebase Auth, apagar conta exige um login recente.
-                // Aqui chamamos o logout por segurança, mas o ideal seria apagar no Firestore primeiro.
                 await SessionManager().logout(); 
-                
                 if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Account data cleared')),
-                  );
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Account data cleared')));
                   Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
                 }
               },
@@ -269,6 +267,149 @@ class _SettingsPageState extends State<SettingsPage> {
           ],
         );
       },
+    );
+  }
+}
+
+// --- PAGINA DE CUSTOMIZAÇÃO ATUALIZADA ---
+
+class MapCustomizationPage extends StatefulWidget {
+  final VoidCallback? onSave;
+  const MapCustomizationPage({super.key, this.onSave});
+
+  @override
+  State<MapCustomizationPage> createState() => _MapCustomizationPageState();
+}
+
+class _MapCustomizationPageState extends State<MapCustomizationPage> {
+  late Color tempVisited;
+  late Color tempPlanned;
+  late Color tempNationality;
+  bool _hasChanges = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final session = SessionManager();
+    tempVisited = session.visitedColorNotifier.value;
+    tempPlanned = session.plannedColorNotifier.value;
+    tempNationality = session.nationalityColorNotifier.value;
+  }
+
+  void _pickColor(String type, Color currentColor) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Pick color for $type'),
+        content: SingleChildScrollView(
+          child: ColorPicker(
+            pickerColor: currentColor,
+            onColorChanged: (color) {
+              setState(() {
+                if (type == 'Visited') tempVisited = color;
+                if (type == 'Planned') tempPlanned = color;
+                if (type == 'Nationality') tempNationality = color;
+                _hasChanges = true;
+              });
+            },
+            enableAlpha: false,
+            labelTypes: const [],
+          ),
+        ),
+        actions: [
+          ElevatedButton(onPressed: () => Navigator.pop(context), child: const Text('Done')),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text("Map Colors")),
+      body: Column(
+        children: [
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.all(20),
+              children: [
+                _tempColorTile("Visited Countries", tempVisited, () => _pickColor('Visited', tempVisited)),
+                _tempColorTile("Planned Trips", tempPlanned, () => _pickColor('Planned', tempPlanned)),
+                _tempColorTile("Your Nationalities", tempNationality, () => _pickColor('Nationality', tempNationality)),
+                const SizedBox(height: 20),
+                OutlinedButton.icon(
+                  onPressed: () => _confirmReset(),
+                  icon: const Icon(Icons.restore, color: Colors.grey),
+                  label: const Text("Reset to Default Colors", style: TextStyle(color: Colors.grey)),
+                ),
+              ],
+            ),
+          ),
+          // BOTÃO DE SAVE FINAL
+          Padding(
+            padding: const EdgeInsets.all(20.0),
+            child: ElevatedButton(
+              onPressed: _hasChanges ? () async {
+                final session = SessionManager();
+                await session.updateMapColors(
+                  visited: tempVisited,
+                  planned: tempPlanned,
+                  nationality: tempNationality,
+                );
+                
+                if (mounted && widget.onSave != null) {
+                  widget.onSave!(); // Volta para o Mapa
+                  Navigator.pop(context); // Fecha esta página
+                }
+              } : null,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green,
+                foregroundColor: Colors.white,
+                minimumSize: const Size(double.infinity, 55),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15))
+              ),
+              child: const Text("SAVE & UPDATE WIDGET", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _tempColorTile(String title, Color color, VoidCallback onTap) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: ListTile(
+        title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+        trailing: Container(
+          width: 35, height: 35,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle, border: Border.all(color: Colors.black12)),
+        ),
+        onTap: onTap,
+      ),
+    );
+  }
+
+  void _confirmReset() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Reset Colors?"),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
+          TextButton(
+            onPressed: () async {
+              await SessionManager().resetMapColors();
+              if (mounted && widget.onSave != null) {
+                widget.onSave!();
+                Navigator.pop(context);
+                Navigator.pop(context);
+              }
+            },
+            child: const Text("Reset", style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
     );
   }
 }

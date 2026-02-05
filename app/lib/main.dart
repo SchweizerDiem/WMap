@@ -6,15 +6,19 @@ import 'package:countries_world_map/data/maps/world_map.dart';
 import 'package:country_flags/country_flags.dart' as country_flags;
 import 'package:firebase_core/firebase_core.dart';
 import 'dart:convert';
-import 'dart:ui' as ui; // Adicionado para Image
-import 'dart:io'; // Adicionado para File
-import 'package:flutter/rendering.dart'; // Adicionado para RepaintBoundary
-import 'package:flutter/services.dart'; // Adicionado para ByteData
+import 'dart:ui' as ui; 
+import 'dart:io'; 
+import 'package:flutter/rendering.dart'; 
+import 'package:flutter/services.dart'; 
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart'; 
-import 'package:path_provider/path_provider.dart'; // Adicionado
-import 'package:home_widget/home_widget.dart'; // Adicionado
+import 'package:path_provider/path_provider.dart'; 
+import 'package:home_widget/home_widget.dart'; 
+
+// IMPORTS CORRIGIDOS (Apenas Dart, sem erro de Gradle)
+import 'package:timezone/data/latest.dart' as tz;
+import 'package:timezone/timezone.dart' as tz;
 
 // Pages
 import './pages/welcome.dart';
@@ -57,6 +61,9 @@ Widget buildFlag(String code, {double width = 40, double height = 24}) {
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
+  // 1. INICIALIZAÇÃO DA BASE DE DADOS DE TEMPO (IANA)
+  tz.initializeTimeZones();
+
   try {
     await Firebase.initializeApp();
   } catch (e) {
@@ -70,7 +77,8 @@ void main() async {
   Widget initialScreen;
 
   if (rememberMe && user != null) {
-    await SessionManager().refreshUserData();
+    final session = SessionManager();
+    await session.refreshUserData(); 
     initialScreen = const HomePage();
   } else {
     initialScreen = const WelcomePage();
@@ -112,12 +120,17 @@ class _HomePageState extends State<HomePage> {
   int currentPageIndex = 0;
   final TextEditingController _searchController = TextEditingController();
   final TransformationController _transformationController = TransformationController();
-  final GlobalKey _mapKey = GlobalKey(); // Chave para capturar o mapa
+  final GlobalKey _mapKey = GlobalKey(); 
   Set<String> _nationalityCountries = <String>{};
 
   @override
   void initState() {
     super.initState();
+
+    final session = SessionManager();
+    session.visitedColorNotifier.addListener(_onColorChanged);
+    session.plannedColorNotifier.addListener(_onColorChanged);
+    session.nationalityColorNotifier.addListener(_onColorChanged);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
@@ -130,7 +143,6 @@ class _HomePageState extends State<HomePage> {
     });
     
     Future.delayed(Duration.zero, () async {
-      final session = SessionManager();
       await session.refreshUserData();
       final user = session.getCurrentUser();
       
@@ -141,66 +153,126 @@ class _HomePageState extends State<HomePage> {
         if (user.nationalities.isEmpty && mounted) {
           _showNationalityPicker();
         }
+        _updateWidgetMap(); 
       }
     });
   }
 
   @override
   void dispose() {
+    final session = SessionManager();
+    session.visitedColorNotifier.removeListener(_onColorChanged);
+    session.plannedColorNotifier.removeListener(_onColorChanged);
+    session.nationalityColorNotifier.removeListener(_onColorChanged);
+    
     _transformationController.dispose();
     _searchController.dispose();
     super.dispose();
   }
 
-  // --- LÓGICA DO WIDGET ---
-  Future<void> _updateWidgetMap() async {
-  if (!mounted) return;
-  
-  try {
-    setState(() => _isUpdatingWidget = true); // Ativa o loading
-
-    final originalMatrix = Matrix4.fromFloat64List(_transformationController.value.storage);
-    _transformationController.value = Matrix4.identity(); // Tira o zoom
-
-    await Future.delayed(const Duration(milliseconds: 250)); // Tempo para o mapa renderizar
-
-    final RenderRepaintBoundary? boundary = _mapKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
-    if (boundary != null) {
-      ui.Image image = await boundary.toImage(pixelRatio: 2.0);
-      ByteData? byteData = await image.toByteData(format: ui.ImageByteFormat.png);
-      if (byteData != null) {
-        final directory = await getApplicationDocumentsDirectory();
-        final imagePath = '${directory.path}/map_snapshot.png';
-        await File(imagePath).writeAsBytes(byteData.buffer.asUint8List());
-        await HomeWidget.saveWidgetData<String>('map_image_path', imagePath);
-        await HomeWidget.updateWidget(name: 'MapWidgetProvider', androidName: 'MapWidgetProvider');
-      }
-    }
-
-    _transformationController.value = originalMatrix; // Volta o zoom original
-    setState(() => _isUpdatingWidget = false); // Tira o loading
-
-  } catch (e) {
-    setState(() => _isUpdatingWidget = false);
-    debugPrint("Erro: $e");
+  void _onColorChanged() {
+    if (mounted) setState(() {});
   }
 
+  // --- LÓGICA DO WIDGET ---
+  Future<void> _updateWidgetMap() async {
+    if (!mounted || currentPageIndex != 0 || _mapKey.currentContext == null) return;
+    
+    try {
+      setState(() => _isUpdatingWidget = true);
+      final originalMatrix = Matrix4.fromFloat64List(_transformationController.value.storage);
+      _transformationController.value = Matrix4.identity(); 
 
-  final session = SessionManager();
-  final visitedCount = session.getVisitedCountriesForCurrentUser().length;
+      await Future.delayed(const Duration(milliseconds: 500)); 
 
-  // 2. Salvar o texto formatado para o widget
-  await HomeWidget.saveWidgetData<String>(
-    'visited_count_text', 
-    'Countries Visited: $visitedCount/250'
-  );
+      final RenderRepaintBoundary? boundary = _mapKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
+      if (boundary != null) {
+        ui.Image image = await boundary.toImage(pixelRatio: 2.0);
+        ByteData? byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+        if (byteData != null) {
+          final directory = await getApplicationDocumentsDirectory();
+          final imagePath = '${directory.path}/map_snapshot.png';
+          await File(imagePath).writeAsBytes(byteData.buffer.asUint8List());
+          
+          await HomeWidget.saveWidgetData<String>('map_image_path', imagePath);
+          final session = SessionManager();
+          final visitedCount = session.getVisitedCountriesForCurrentUser().length;
+          await HomeWidget.saveWidgetData<String>('visited_count_text', 'Visited: $visitedCount/250');
+          
+          await HomeWidget.updateWidget(name: 'MapWidgetProvider', androidName: 'MapWidgetProvider');
+        }
+      }
 
-  // 3. Atualizar o widget
-  await HomeWidget.updateWidget(
-    name: 'MapWidgetProvider',
-    androidName: 'MapWidgetProvider',
-  );
-}
+      _transformationController.value = originalMatrix; 
+      setState(() => _isUpdatingWidget = false);
+
+    } catch (e) {
+      if (mounted) setState(() => _isUpdatingWidget = false);
+      debugPrint("Erro Widget Update: $e");
+    }
+  }
+
+  // --- LÓGICA DE TEMPO ROBUSTA (OFFLINE) ---
+  String _getCountryTime(String countryCode, List<dynamic> timezones) {
+    try {
+      final Map<String, String> codeToLocation = {
+        'PT': 'Europe/Lisbon',
+        'ES': 'Europe/Madrid',
+        'GB': 'Europe/London',
+        'FR': 'Europe/Paris',
+        'DE': 'Europe/Berlin',
+        'IT': 'Europe/Rome',
+        'BR': 'America/Sao_Paulo',
+        'US': 'America/New_York',
+        'JP': 'Asia/Tokyo',
+        'CN': 'Asia/Shanghai',
+        'RU': 'Europe/Moscow',
+        'AO': 'Africa/Luanda',
+        'CV': 'Atlantic/Cape_Verde',
+        'CH': 'Europe/Zurich',
+        'BE': 'Europe/Brussels',
+        'NL': 'Europe/Amsterdam',
+      };
+
+      String? locationName = codeToLocation[countryCode.toUpperCase()];
+      
+      if (locationName != null) {
+        final location = tz.getLocation(locationName);
+        final now = tz.TZDateTime.now(location);
+        return DateFormat('HH:mm').format(now);
+      }
+
+      if (timezones.isNotEmpty) {
+        return _calculateTimeFromOffset(timezones[0].toString());
+      }
+      
+      return "--:--";
+    } catch (e) {
+      return "--:--";
+    }
+  }
+
+  String _calculateTimeFromOffset(String offsetStr) {
+    try {
+      DateTime nowUtc = DateTime.now().toUtc();
+      String cleanOffset = offsetStr.replaceAll('UTC', '').trim();
+      if (cleanOffset.isEmpty) return DateFormat('HH:mm').format(nowUtc);
+      
+      bool isNegative = cleanOffset.startsWith('-');
+      String digits = cleanOffset.replaceAll(RegExp(r'[^0-9:]'), '');
+      List<String> parts = digits.split(':');
+      
+      int hours = int.parse(parts[0]);
+      int minutes = parts.length > 1 ? int.parse(parts[1]) : 0;
+      
+      Duration duration = Duration(hours: hours, minutes: minutes);
+      DateTime target = isNegative ? nowUtc.subtract(duration) : nowUtc.add(duration);
+      
+      return DateFormat('HH:mm').format(target);
+    } catch (_) {
+      return "--:--";
+    }
+  }
 
   // --- LÓGICA DA API ---
   Future<Map<String, dynamic>?> _fetchCountryData(String code) async {
@@ -222,19 +294,6 @@ class _HomePageState extends State<HomePage> {
         final String capitals = capitalsList != null ? capitalsList.join(', ') : 'N/A';
         final List<dynamic> timezones = country['timezones'] ?? [];
 
-        String capitalTime = "N/A";
-        String otherTimes = "";
-
-        if (timezones.isNotEmpty) {
-          capitalTime = _calculateTime(timezones.first);
-          if (timezones.length > 1) {
-            otherTimes = timezones.skip(1)
-                .map((tz) => _calculateTime(tz))
-                .toSet() 
-                .join('  •  ');
-          }
-        }
-
         return {
           'capital': capitals,
           'population': country['population'] ?? 0,
@@ -243,8 +302,7 @@ class _HomePageState extends State<HomePage> {
           'languages': (country['languages'] as Map?)?.values.join(', ') ?? 'N/A',
           'currency': currencyName,
           'currencySymbol': currencySymbol,
-          'capitalTime': capitalTime,
-          'otherTimes': otherTimes,
+          'capitalTime': _getCountryTime(code, timezones),
         };
       }
     } catch (e) {
@@ -253,24 +311,7 @@ class _HomePageState extends State<HomePage> {
     return null;
   }
 
-  String _calculateTime(String timezoneStr) {
-    try {
-      DateTime now = DateTime.now().toUtc();
-      if (timezoneStr == "UTC") return DateFormat('HH:mm').format(now);
-      final String offsetPart = timezoneStr.substring(3); 
-      final bool isNegative = offsetPart.startsWith('-');
-      final cleanOffset = offsetPart.replaceAll('+', '').replaceAll('-', '');
-      final parts = cleanOffset.split(':');
-      int hours = int.parse(parts[0]);
-      int minutes = parts.length > 1 ? int.parse(parts[1]) : 0;
-      Duration offset = Duration(hours: hours, minutes: minutes);
-      DateTime localTime = isNegative ? now.subtract(offset) : now.add(offset);
-      return DateFormat('HH:mm').format(localTime);
-    } catch (e) {
-      return "--:--";
-    }
-  }
-
+  // ... (Restante do código original mantido exatamente igual: _showCountryInfoSheet, _buildDetailsGrid, etc.)
   void _showCountryInfoSheet(BuildContext context, String countryCode, String countryName) {
     showModalBottomSheet(
       context: context,
@@ -353,11 +394,6 @@ class _HomePageState extends State<HomePage> {
                   children: [
                     const Text("LOCAL TIME (CAPITAL)", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xff4841a8))),
                     Text(data['capitalTime'], style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xff4841a8))),
-                    if (data['otherTimes'].isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 4),
-                        child: Text("Other zones: ${data['otherTimes']}", style: TextStyle(fontSize: 11, color: Colors.grey[600], fontStyle: FontStyle.italic)),
-                      ),
                   ],
                 ),
               ),
@@ -442,7 +478,7 @@ class _HomePageState extends State<HomePage> {
                 await session.toggleVisitedForCurrentUser(code);
                 setInternalState(() {}); 
                 setState(() {}); 
-                Future.delayed(const Duration(milliseconds: 500), () => _updateWidgetMap());
+                _updateWidgetMap(); 
               },
             ),
           ),
@@ -459,7 +495,7 @@ class _HomePageState extends State<HomePage> {
                 await session.togglePlannedForCurrentUser(code);
                 setInternalState(() {});
                 setState(() {});
-                Future.delayed(const Duration(milliseconds: 500), () => _updateWidgetMap());
+                _updateWidgetMap();
               },
             ),
           ),
@@ -510,107 +546,135 @@ class _HomePageState extends State<HomePage> {
     if (selected != null && selected.isNotEmpty) {
       setState(() { _nationalityCountries = selected.toSet(); });
       await SessionManager().updateNationalities(selected);
-      Future.delayed(const Duration(milliseconds: 800), () => _updateWidgetMap());
+      _updateWidgetMap();
     }
   }
 
   @override
-Widget build(BuildContext context) {
-  return Scaffold(
-    appBar: AppBar(
-      title: SvgPicture.asset("assets/images/airplane-tilt.svg", width: 40),
-      automaticallyImplyLeading: false,
-    ),
-    bottomNavigationBar: NavigationBar(
-      onDestinationSelected: (int index) => setState(() => currentPageIndex = index),
-      selectedIndex: currentPageIndex,
-      destinations: const <Widget>[
-        NavigationDestination(icon: Icon(Icons.map), label: 'Map'),
-        NavigationDestination(icon: Icon(Icons.people), label: 'Friends'),
-        NavigationDestination(icon: Icon(Icons.image), label: 'Gallery'),
-        NavigationDestination(icon: Icon(Icons.person), label: 'Profile'),
-        NavigationDestination(icon: Icon(Icons.settings), label: 'Settings'),
-      ],
-    ),
-    body: <Widget>[
-      Stack( // Adicionamos este Stack aqui para o loading flutuar
-        children: [
-          Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(12.0),
-                child: TextField(
-                  controller: _searchController,
-                  onChanged: (_) => setState(() {}),
-                  decoration: InputDecoration(hintText: 'Search countries...', prefixIcon: const Icon(Icons.search), border: OutlineInputBorder(borderRadius: BorderRadius.circular(20))),
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: SvgPicture.asset("assets/images/airplane-tilt.svg", width: 40),
+        automaticallyImplyLeading: false,
+      ),
+      bottomNavigationBar: NavigationBar(
+        onDestinationSelected: (int index) {
+          setState(() => currentPageIndex = index);
+          if (index == 0) {
+            Future.delayed(const Duration(milliseconds: 600), () {
+              if (mounted) _updateWidgetMap();
+            });
+          }
+        },
+        selectedIndex: currentPageIndex,
+        destinations: const <Widget>[
+          NavigationDestination(icon: Icon(Icons.map), label: 'Map'),
+          NavigationDestination(icon: Icon(Icons.people), label: 'Friends'),
+          NavigationDestination(icon: Icon(Icons.image), label: 'Gallery'),
+          NavigationDestination(icon: Icon(Icons.person), label: 'Profile'),
+          NavigationDestination(icon: Icon(Icons.settings), label: 'Settings'),
+        ],
+      ),
+
+      body: <Widget>[
+        Stack(
+          children: [
+            Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(12.0),
+                  child: TextField(
+                    controller: _searchController,
+                    onChanged: (_) => setState(() {}),
+                    decoration: InputDecoration(
+                      hintText: 'Search countries...', 
+                      prefixIcon: const Icon(Icons.search), 
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(20))
+                    ),
+                  ),
                 ),
-              ),
-              _searchController.text.isNotEmpty
-                  ? _buildSearchResults()
-                  : Expanded(
-                      child: RepaintBoundary(
-                        key: _mapKey,
-                        child: InteractiveViewer(
-                          transformationController: _transformationController,
-                          maxScale: 20.0,
-                          minScale: 1.0, // Alterado para 1.0 para o reset de zoom ser total
-                          child: ValueListenableBuilder<int>(
-                            valueListenable: SessionManager().visitedCountNotifier,
-                            builder: (context, visitedCount, child) {
-                              final session = SessionManager();
-                              final user = session.getCurrentUser();
-                              final visited = user?.visitedCountries ?? {};
-                              final planned = user?.plannedCountries ?? {};
-                              final nationalities = user?.nationalities ?? []; 
-                              final Map<String, Color> colorMap = {};
+                _searchController.text.isNotEmpty
+                    ? _buildSearchResults()
+                    : Expanded(
+                        child: RepaintBoundary(
+                          key: _mapKey,
+                          child: InteractiveViewer(
+                            transformationController: _transformationController,
+                            maxScale: 20.0,
+                            minScale: 1.0,
+                            child: AnimatedBuilder( 
+                              animation: Listenable.merge([
+                                SessionManager().visitedCountNotifier,
+                                SessionManager().visitedColorNotifier,
+                                SessionManager().plannedColorNotifier,
+                                SessionManager().nationalityColorNotifier,
+                              ]),
+                              builder: (context, child) {
+                                final session = SessionManager();
+                                final user = session.getCurrentUser();
+                                final visited = user?.visitedCountries ?? {};
+                                final planned = user?.plannedCountries ?? {};
+                                final nationalities = user?.nationalities ?? []; 
+                                
+                                final Map<String, Color> colorMap = {};
 
-                              for (var code in planned) colorMap[normalizeCountryCode(code)] = const Color.fromARGB(255, 6, 16, 148);
-                              for (var code in visited) colorMap[normalizeCountryCode(code)] = const Color.fromARGB(255, 31, 131, 212);
-                              for (var code in nationalities) colorMap[normalizeCountryCode(code)] = const Color.fromARGB(255, 9, 181, 233);
+                                for (var code in planned) {
+                                  colorMap[normalizeCountryCode(code)] = session.plannedColorNotifier.value;
+                                }
+                                for (var code in visited) {
+                                  colorMap[normalizeCountryCode(code)] = session.visitedColorNotifier.value;
+                                }
+                                for (var code in nationalities) {
+                                  colorMap[normalizeCountryCode(code)] = session.nationalityColorNotifier.value;
+                                }
 
-                              return SimpleMap(
-                                instructions: SMapWorld.instructions,
-                                defaultColor: Colors.grey,
-                                colors: colorMap,
-                                countryBorder: const CountryBorder(color: Colors.black, width: 0.1),
-                                fit: BoxFit.contain,
-                                callback: (id, name, tapdetails) {
-                                  if (id.isNotEmpty) _showCountryInfoSheet(context, id, getCountryName(id));
-                                },
-                              );
-                            },
+                                return SimpleMap(
+                                  instructions: SMapWorld.instructions,
+                                  defaultColor: Colors.grey.shade400,
+                                  colors: colorMap,
+                                  countryBorder: const CountryBorder(color: Colors.black, width: 0.1),
+                                  fit: BoxFit.contain,
+                                  callback: (id, name, tapdetails) {
+                                    if (id.isNotEmpty) _showCountryInfoSheet(context, id, getCountryName(id));
+                                  },
+                                );
+                              },
+                            ),
                           ),
                         ),
                       ),
+              ],
+            ),
+            if (_isUpdatingWidget)
+              Positioned.fill(
+                child: Container(
+                  color: Colors.white.withOpacity(0.9),
+                  child: const Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        CircularProgressIndicator(),
+                        SizedBox(height: 15),
+                        Text("Updating Widget Map...", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blueGrey)),
+                      ],
                     ),
-            ],
-          ),
-          // SE ESTIVER A ATUALIZAR, MOSTRA ESTE BLOQUEIO
-          if (_isUpdatingWidget)
-            Positioned.fill(
-              child: Container(
-                color: Colors.white.withOpacity(0.9), // Bloqueia a visão do "pulo" do mapa
-                child: const Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      CircularProgressIndicator(),
-                      SizedBox(height: 15),
-                      Text("Updating Widget Map...", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blueGrey)),
-                    ],
                   ),
                 ),
               ),
-            ),
-        ],
-      ),
-      const FriendsPage(),
-      GalleryPage(onBackPressed: () => setState(() => currentPageIndex = 0)),
-      ProfilePage(onBackPressed: () => setState(() => currentPageIndex = 0)),
-      SettingsPage(onBackPressed: () => setState(() => currentPageIndex = 0)),
-    ][currentPageIndex],
-  );
-}
+          ],
+        ),
+        const FriendsPage(),
+        GalleryPage(onBackPressed: () => setState(() => currentPageIndex = 0)),
+        ProfilePage(onBackPressed: () => setState(() => currentPageIndex = 0)),
+        SettingsPage(onBackPressed: () {
+          setState(() => currentPageIndex = 0);
+          Future.delayed(const Duration(milliseconds: 600), () {
+            if (mounted) _updateWidgetMap();
+          });
+        }),
+      ][currentPageIndex],
+    );
+  }
 
   Widget _buildSearchResults() {
     final query = _searchController.text.toLowerCase();
