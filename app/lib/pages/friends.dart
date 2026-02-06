@@ -1,4 +1,4 @@
-import 'package:app/main.dart';
+import 'package:WMap/main.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../session_manager.dart';
@@ -13,6 +13,7 @@ class FriendsPage extends StatefulWidget {
 }
 
 class _FriendsPageState extends State<FriendsPage> {
+  // Instância do gestor de sessão para aceder aos dados do utilizador e streams
   final _sessionManager = SessionManager();
 
   @override
@@ -20,12 +21,10 @@ class _FriendsPageState extends State<FriendsPage> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('My Friends'),
-        // Alterado: Removemos o false para que o Flutter mostre a seta automaticamente
-        // Ou forçamos o ícone caso queiras garantir o estilo:
+        // Botão de retorno personalizado para garantir que voltamos à HomePage limpando a pilha de navegação
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () {
-            // Isto remove as páginas anteriores da memória e abre o Mapa como nova "base"
             Navigator.pushAndRemoveUntil(
               context,
               MaterialPageRoute(builder: (context) => const HomePage()), 
@@ -34,6 +33,7 @@ class _FriendsPageState extends State<FriendsPage> {
           },
         ),
         actions: [
+          // StreamBuilder que escuta pedidos de amizade pendentes para mostrar a notificação (badge)
           StreamBuilder<QuerySnapshot>(
             stream: _sessionManager.getIncomingRequestsStream(),
             builder: (context, snapshot) {
@@ -49,6 +49,7 @@ class _FriendsPageState extends State<FriendsPage> {
                       );
                     },
                   ),
+                  // Ponto vermelho indicativo de novos pedidos recebidos
                   if (hasRequests)
                     Positioned(
                       right: 8,
@@ -65,15 +66,18 @@ class _FriendsPageState extends State<FriendsPage> {
           ),
         ],
       ),
+      // StreamBuilder que reconstrói a lista de amigos automaticamente sempre que há alterações no Firestore
       body: StreamBuilder<List<Map<String, dynamic>>>(
         stream: _sessionManager.getFriendsListStream(),
         builder: (context, snapshot) {
+          // Mostra um indicador de progresso enquanto os dados estão a ser carregados
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
 
           final friends = snapshot.data ?? [];
 
+          // Layout exibido quando o utilizador ainda não tem amigos adicionados
           if (friends.isEmpty) {
             return Center(
               child: Column(
@@ -100,6 +104,7 @@ class _FriendsPageState extends State<FriendsPage> {
             );
           }
 
+          // Construtor de lista eficiente para exibir os cards de cada amigo
           return ListView.builder(
             itemCount: friends.length,
             padding: const EdgeInsets.all(12.0),
@@ -112,6 +117,7 @@ class _FriendsPageState extends State<FriendsPage> {
                 margin: const EdgeInsets.symmetric(vertical: 6.0),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 child: ListTile(
+                  // Avatar com a inicial do nome do amigo
                   leading: CircleAvatar(
                     backgroundColor: Colors.blue[100],
                     child: Text(
@@ -123,8 +129,10 @@ class _FriendsPageState extends State<FriendsPage> {
                     name,
                     style: const TextStyle(fontWeight: FontWeight.bold),
                   ),
+                  // Exibe o código de amizade único por baixo do nome
                   subtitle: Text(friend['friendCode'] ?? ''),
                   trailing: const Icon(Icons.chevron_right),
+                  // Ao clicar, navega para o perfil detalhado do amigo selecionado
                   onTap: () {
                     Navigator.push(
                       context,

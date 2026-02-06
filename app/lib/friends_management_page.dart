@@ -2,13 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'session_manager.dart';
 
+/// Página principal de gestão social, organizada em 3 abas (Tabs).
 class FriendsManagementPage extends StatelessWidget {
   const FriendsManagementPage({super.key});
 
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 3,
+      length: 3, // Define o número de abas
       child: Scaffold(
         appBar: AppBar(
           title: const Text('Manage Friends'),
@@ -17,6 +18,7 @@ class FriendsManagementPage extends StatelessWidget {
               const Tab(icon: Icon(Icons.people), text: 'Friends'),
               const Tab(icon: Icon(Icons.person_add), text: 'Add'),
               Tab(
+                // O ícone da aba de pedidos tem um StreamBuilder para mostrar uma notificação (ponto vermelho)
                 icon: StreamBuilder<QuerySnapshot>(
                   stream: SessionManager().getIncomingRequestsStream(),
                   builder: (context, snapshot) {
@@ -25,14 +27,17 @@ class FriendsManagementPage extends StatelessWidget {
                       clipBehavior: Clip.none,
                       children: [
                         const Icon(Icons.mail),
-                        if (hasReq)
+                        if (hasReq) // Se houver pedidos pendentes, desenha o indicador visual
                           Positioned(
                             right: -5,
                             top: -2,
                             child: Container(
                               width: 10,
                               height: 10,
-                              decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                              decoration: const BoxDecoration(
+                                color: Colors.red, 
+                                shape: BoxShape.circle
+                              ),
                             ),
                           ),
                       ],
@@ -44,11 +49,12 @@ class FriendsManagementPage extends StatelessWidget {
             ],
           ),
         ),
+        // O corpo do Scaffold alterna entre os widgets das abas conforme a seleção
         body: const TabBarView(
           children: [
-            FriendsListTab(),    // Aba 1
-            AddFriendTab(),      // Aba 2
-            PendingRequestsTab(),// Aba 3
+            FriendsListTab(),    // Aba 1: Lista de Amigos atuais
+            AddFriendTab(),      // Aba 2: Input para novo pedido
+            PendingRequestsTab(),// Aba 3: Aceitar/Rejeitar convites
           ],
         ),
       ),
@@ -63,9 +69,11 @@ class FriendsListTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<List<Map<String, dynamic>>>(
+      // Ouve em tempo real a lista de amigos processada pelo SessionManager
       stream: SessionManager().getFriendsListStream(),
       builder: (context, snapshot) {
         if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+        
         final friends = snapshot.data!;
         if (friends.isEmpty) return const Center(child: Text("No friends yet."));
 
@@ -79,6 +87,7 @@ class FriendsListTab extends StatelessWidget {
               subtitle: Text(friend['friendCode'] ?? ''),
               trailing: IconButton(
                 icon: const Icon(Icons.person_remove, color: Colors.red),
+                tooltip: 'Remove Friend',
                 onPressed: () => SessionManager().removeFriend(friend['id']),
               ),
             );
@@ -117,9 +126,12 @@ class _AddFriendTabState extends State<AddFriendTab> {
           const SizedBox(height: 16),
           ElevatedButton(
             onPressed: () async {
+              // Envia o pedido e mostra o resultado (sucesso ou erro) numa SnackBar
               final res = await SessionManager().sendFriendRequest(_controller.text);
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(res)));
-              _controller.clear();
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(res)));
+                _controller.clear();
+              }
             },
             child: const Text('Send Friend Request'),
           ),
@@ -136,9 +148,11 @@ class PendingRequestsTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<QuerySnapshot>(
+      // Ouve a subcoleção de pedidos de amizade destinados ao utilizador atual
       stream: SessionManager().getIncomingRequestsStream(),
       builder: (context, snapshot) {
         if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+        
         final docs = snapshot.data!.docs;
         if (docs.isEmpty) return const Center(child: Text("No pending requests."));
 
@@ -155,10 +169,12 @@ class PendingRequestsTab extends StatelessWidget {
               trailing: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  // Botão para Aceitar
                   IconButton(
                     icon: const Icon(Icons.check, color: Colors.green),
                     onPressed: () => SessionManager().acceptFriendRequest(requestId, fromId),
                   ),
+                  // Botão para Rejeitar
                   IconButton(
                     icon: const Icon(Icons.close, color: Colors.red),
                     onPressed: () => SessionManager().rejectFriendRequest(requestId),

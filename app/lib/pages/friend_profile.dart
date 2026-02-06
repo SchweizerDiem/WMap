@@ -9,35 +9,36 @@ class FriendProfilePage extends StatelessWidget {
 
   const FriendProfilePage({super.key, required this.friendData});
 
+  // Função para garantir que os códigos dos países fiquem em minúsculas para o pacote do mapa
   String normalize(String code) => code.toLowerCase();
 
   @override
   Widget build(BuildContext context) {
-    // 1. Extração de dados básicos
+    // 1. Extração de dados básicos: recupera as informações do mapa de dados do amigo
     final String friendId = friendData['id'] ?? '';
     final String name = friendData['name'] ?? 'Friend';
     final Set<String> visited = Set<String>.from(friendData['visitedCountries'] ?? []);
     final Set<String> planned = Set<String>.from(friendData['plannedCountries'] ?? []);
     final List<String> nationalities = List<String>.from(friendData['nationalities'] ?? []);
     
-    // 2. Cálculos consolidados (Nacionalidades + Visitados)
+    // 2. Cálculos consolidados: define estatísticas de exploração (Nacionalidades + Visitados)
     const int totalCountries = 250;
     final Set<String> allVisited = {...nationalities, ...visited};
     final int totalVisitedCount = allVisited.length;
     final double percentValue = (totalVisitedCount / totalCountries).clamp(0.0, 1.0);
 
-    // 3. Mapeamento de cores para o Mapa
+    // 3. Mapeamento de cores para o Mapa: define a lógica visual de preenchimento do mapa mundial
     final Map<String, Color> colorMap = {};
 
-    // Planeados (Base)
+    // Define a cor para países Planeados (Base)
     for (var code in planned) {
       colorMap[normalize(code)] = const Color.fromARGB(255, 6, 16, 148);
     }
-    // Visitados (Sobrepõe)
+    // Define a cor para países Visitados (Sobrepõe os planeados)
     for (var code in visited) {
       colorMap[normalize(code)] = const Color.fromARGB(255, 31, 131, 212);
     }
-    // Nacionalidades (Prioridade máxima)
+    // Define a cor para as Nacionalidades (Prioridade visual máxima)
     for (var code in nationalities) {
       colorMap[normalize(code)] = const Color.fromARGB(255, 9, 181, 233);
     }
@@ -46,6 +47,7 @@ class FriendProfilePage extends StatelessWidget {
       appBar: AppBar(
         title: Text("$name's Profile"),
         actions: [
+          // Botão para remover o amigo da lista
           IconButton(
             icon: const Icon(Icons.person_remove, color: Colors.redAccent),
             onPressed: () => _showRemoveDialog(context, friendId, name),
@@ -57,7 +59,7 @@ class FriendProfilePage extends StatelessWidget {
         padding: const EdgeInsets.all(24.0),
         child: Column(
           children: [
-            // --- CABEÇALHO (Nome e Bandeiras em linha) ---
+            // --- CABEÇALHO (Exibe Nome e Bandeiras das nacionalidades lado a lado) ---
             Center(
               child: Wrap(
                 alignment: WrapAlignment.center,
@@ -87,7 +89,7 @@ class FriendProfilePage extends StatelessWidget {
                         
             const SizedBox(height: 24),
 
-            // --- MAPA ESTÁTICO ---
+            // --- MAPA ESTÁTICO (Representação visual das viagens do amigo com zoom) ---
             Container(
               height: 250,
               width: double.infinity,
@@ -113,7 +115,7 @@ class FriendProfilePage extends StatelessWidget {
 
             const Divider(height: 48),
 
-            // --- CARD: COUNTRIES VISITED ---
+            // --- CARD: COUNTRIES VISITED (Lista expansível com os países já visitados) ---
             Card(
               elevation: 2,
               clipBehavior: Clip.antiAlias,
@@ -143,7 +145,7 @@ class FriendProfilePage extends StatelessWidget {
 
             const SizedBox(height: 16),
 
-            // --- CARD: WORLD EXPLORATION (PERCENTAGEM) ---
+            // --- CARD: WORLD EXPLORATION (Barra de progresso percentual do mundo explorado) ---
             Card(
               elevation: 2,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -173,7 +175,7 @@ class FriendProfilePage extends StatelessWidget {
 
             const SizedBox(height: 16),
 
-            // --- CARD: FUTURE TRIPS ---
+            // --- CARD: FUTURE TRIPS (Lista expansível com os países que o amigo planeia visitar) ---
             Card(
               elevation: 2,
               clipBehavior: Clip.antiAlias,
@@ -206,6 +208,7 @@ class FriendProfilePage extends StatelessWidget {
     );
   }
 
+  // Diálogo de confirmação para remover o amigo
   void _showRemoveDialog(BuildContext context, String friendId, String name) {
     showDialog(
       context: context,

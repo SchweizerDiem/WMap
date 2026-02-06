@@ -23,19 +23,22 @@ class _ProfilePageState extends State<ProfilePage> {
   void initState() {
     super.initState();
     _profileManager = ProfileManager();
+    // Carrega a imagem de perfil guardada localmente ao iniciar
     _profileManager.loadProfileImage();
 
-    // --- CORREÇÃO AQUI: Sincronizar o userNameNotifier com o nome real do utilizador ---
+    // --- SINCRONIZAÇÃO: Garante que o Notifier global tem o nome atualizado do utilizador logado ---
     final currentUser = SessionManager().getCurrentUser();
     if (currentUser != null && currentUser.name.isNotEmpty) {
       userNameNotifier.value = currentUser.name;
     }
   }
 
+  // Abre a galeria do sistema para o utilizador escolher uma nova foto de perfil
   Future<void> _pickImageFromGallery() async {
     try {
       final XFile? pickedFile = await _imagePicker.pickImage(source: ImageSource.gallery);
       if (pickedFile != null) {
+        // Atualiza a imagem através do manager (que trata do armazenamento e notificação da UI)
         _profileManager.setProfileImage(File(pickedFile.path));
       }
     } catch (e) {
@@ -52,6 +55,7 @@ class _ProfilePageState extends State<ProfilePage> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Profile'),
+        // Define se mostra o botão de voltar com base na origem da página
         leading: widget.onBackPressed != null
             ? IconButton(icon: const Icon(Icons.arrow_back), onPressed: widget.onBackPressed)
             : null,
@@ -60,12 +64,13 @@ class _ProfilePageState extends State<ProfilePage> {
         padding: const EdgeInsets.all(24.0),
         child: Column(
           children: [
-            // --- CABEÇALHO CENTRADO ---
+            // --- CABEÇALHO CENTRADO (Avatar, Nome, Nacionalidades e Friend Code) ---
             Center(
               child: Wrap(
                 alignment: WrapAlignment.center,
                 crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
+                  // Secção do Avatar clicável
                   GestureDetector(
                     onTap: _pickImageFromGallery,
                     child: ValueListenableBuilder<File?>(
@@ -81,6 +86,7 @@ class _ProfilePageState extends State<ProfilePage> {
                     ),
                   ),
                   const SizedBox(width: 20),
+                  // Informações de Texto ao lado do Avatar
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
@@ -88,7 +94,7 @@ class _ProfilePageState extends State<ProfilePage> {
                       Wrap(
                         crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
-                          // Exibe o nome do userNameNotifier (agora sincronizado no initState)
+                          // Nome do utilizador (reage a mudanças globais via userNameNotifier)
                           ValueListenableBuilder<String>(
                             valueListenable: userNameNotifier,
                             builder: (context, name, child) => Text(
@@ -97,6 +103,7 @@ class _ProfilePageState extends State<ProfilePage> {
                             ),
                           ),
                           const SizedBox(width: 8),
+                          // Bandeiras das Nacionalidades do utilizador
                           Builder(builder: (context) {
                             final user = SessionManager().getCurrentUser();
                             final nationalities = user?.nationalities ?? [];
@@ -104,6 +111,7 @@ class _ProfilePageState extends State<ProfilePage> {
                               mainAxisSize: MainAxisSize.min,
                               children: nationalities.map((code) {
                                 String displayCode = code.toUpperCase();
+                                // Normalização para o código do Kosovo
                                 if (displayCode == 'KO' || displayCode == 'KOS') displayCode = 'XK';
                                 return Padding(
                                   padding: const EdgeInsets.only(right: 4),
@@ -115,7 +123,7 @@ class _ProfilePageState extends State<ProfilePage> {
                         ],
                       ),
                       const SizedBox(height: 4),
-                      // FRIEND CODE
+                      // FRIEND CODE (Com funcionalidade de copiar para a área de transferência)
                       Builder(builder: (context) {
                         final code = SessionManager().getCurrentUser()?.friendCode ?? '---';
                         return InkWell(
@@ -159,11 +167,12 @@ class _ProfilePageState extends State<ProfilePage> {
             ),
             const Divider(height: 40),
 
-            // --- PAÍSES VISITADOS ---
+            // --- SECÇÃO: PAÍSES VISITADOS E ESTATÍSTICAS ---
             ValueListenableBuilder<int>(
               valueListenable: SessionManager().visitedCountNotifier,
               builder: (context, count, _) {
                 final user = SessionManager().getCurrentUser();
+                // Combina nacionalidades e países visitados para o cálculo total
                 final Set<String> allVisited = {
                   ...(user?.nationalities ?? []),
                   ...(user?.visitedCountries ?? []),
@@ -174,6 +183,7 @@ class _ProfilePageState extends State<ProfilePage> {
 
                 return Column(
                   children: [
+                    // Card com lista expansível de países visitados
                     Card(
                       elevation: 2,
                       clipBehavior: Clip.antiAlias,
@@ -201,7 +211,7 @@ class _ProfilePageState extends State<ProfilePage> {
                       ),
                     ),
                     const SizedBox(height: 16),
-                    // --- PERCENTAGEM ---
+                    // --- CARD DE PERCENTAGEM DE EXPLORAÇÃO DO MUNDO ---
                     Card(
                       elevation: 2,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -232,7 +242,7 @@ class _ProfilePageState extends State<ProfilePage> {
 
             const SizedBox(height: 16),
 
-            // --- FUTURE TRIPS ---
+            // --- SECÇÃO: FUTURE TRIPS (Países planeados) ---
             ValueListenableBuilder<int>(
               valueListenable: SessionManager().plannedCountNotifier,
               builder: (context, count, _) {

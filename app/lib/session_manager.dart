@@ -5,17 +5,18 @@ import 'package:flutter/material.dart';
 import 'package:home_widget/home_widget.dart';
 import 'dart:math';
 
+/// Modelo de dados para representar o perfil e progresso do utilizador
 class UserAccount {
   final String name;
   final String email;
-  final String friendCode;
-  final Set<String> visitedCountries;
-  final Set<String> plannedCountries;
-  final List<String> friends;
-  final List<String> nationalities;
-  final Color colorVisited;
-  final Color colorPlanned;
-  final Color colorNationality;
+  final String friendCode; // Código único para amizades
+  final Set<String> visitedCountries; // Conjunto de códigos ISO de países visitados
+  final Set<String> plannedCountries; // Países que o utilizador planeia visitar
+  final List<String> friends; // IDs dos amigos
+  final List<String> nationalities; // Países de origem do utilizador
+  final Color colorVisited; // Cor personalizada para países visitados no mapa
+  final Color colorPlanned; // Cor personalizada para países planeados
+  final Color colorNationality; // Cor para o país de nacionalidade
 
   UserAccount({
     required this.name,
@@ -32,6 +33,7 @@ class UserAccount {
 }
 
 class SessionManager {
+  // Padrão Singleton: garante que apenas existe uma instância do SessionManager em toda a app
   static final SessionManager _instance = SessionManager._internal();
   factory SessionManager() => _instance;
   SessionManager._internal();
@@ -39,9 +41,10 @@ class SessionManager {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _db = FirebaseFirestore.instance;
 
-  UserAccount? _currentUser;
+  UserAccount? _currentUser; // Armazena os dados do utilizador logado em memória
 
   // --- NOTIFIERS ---
+  // ValueNotifiers permitem que a UI se atualize automaticamente quando os valores mudam
   final ValueNotifier<int> visitedCountNotifier = ValueNotifier<int>(0);
   final ValueNotifier<int> plannedCountNotifier = ValueNotifier<int>(0);
   final ValueNotifier<String> userNameNotifier = ValueNotifier<String>('Guest');
@@ -54,30 +57,31 @@ class SessionManager {
 
   // --- FUNÇÕES DE CONVERSÃO ---
 
-  // Converte Cor para String Hexadecimal com '#' (Para o HomeWidget/Android)
+  // Converte a cor do Flutter para String Hex (ex: #FF00FF), necessário para salvar no DB e ler no Android
   String colorToHex(Color color) {
     return '#${color.value.toRadixString(16).padLeft(8, '0').toUpperCase()}';
   }
 
-  // Helper para converter String Hex para Cor (Vinda do Firestore)
+  // Converte a String Hex guardada no Firestore de volta para um objeto Color do Flutter
   Color _hexToColor(String hex) {
     try {
-      // Remove o '#' se existir para evitar erros no parse
       String cleanHex = hex.replaceFirst('#', '');
       return Color(int.parse(cleanHex, radix: 16));
     } catch (e) {
-      return Colors.blue; // Cor de fallback
+      return Colors.blue; // Cor padrão caso haja erro
     }
   }
 
+  // Gera um código aleatório (ex: WMP-123456) para o utilizador partilhar com amigos
   String _generateFriendCode() {
     final random = Random();
     int code = random.nextInt(900000) + 100000;
     return "WMP-$code";
   }
 
-  // --- AUTH ---
+  // --- AUTH (AUTENTICAÇÃO) ---
 
+  // Regista um novo utilizador no Firebase Auth e cria o seu perfil inicial no Firestore
   Future<bool> registerAccount(String name, String email, String password) async {
     try {
       UserCredential res = await _auth.createUserWithEmailAndPassword(
@@ -86,7 +90,6 @@ class SessionManager {
       );
 
       if (res.user != null) {
-        // Usamos colorToHex para manter consistência no DB
         await _db.collection('users').doc(res.user!.uid).set({
           'name': name,
           'email': email,
@@ -108,6 +111,7 @@ class SessionManager {
     }
   }
 
+  // Realiza o login e carrega os dados do utilizador
   Future<bool> login(String email, String password) async {
     try {
       await _auth.signInWithEmailAndPassword(email: email, password: password);
@@ -119,6 +123,7 @@ class SessionManager {
     }
   }
 
+  // Procura os dados do utilizador no Firestore e atualiza todos os Notifiers da UI
   Future<void> refreshUserData() async {
     final user = _auth.currentUser;
     if (user == null) return;
@@ -128,6 +133,7 @@ class SessionManager {
     if (doc.exists) {
       final data = doc.data() as Map<String, dynamic>;
       
+      // Converte as cores vindas do banco de dados
       final Color vColor = data['colorVisited'] != null ? _hexToColor(data['colorVisited']) : const Color(0xFF1F83D4);
       final Color pColor = data['colorPlanned'] != null ? _hexToColor(data['colorPlanned']) : const Color(0xFF061094);
       final Color nColor = data['colorNationality'] != null ? _hexToColor(data['colorNationality']) : const Color(0xFF09B5E9);
@@ -145,6 +151,7 @@ class SessionManager {
         colorNationality: nColor,
       );
 
+      // Atualiza os Notifiers para disparar rebuilds nos widgets que os escutam
       visitedCountNotifier.value = _currentUser!.visitedCountries.length;
       plannedCountNotifier.value = _currentUser!.plannedCountries.length;
       userNameNotifier.value = _currentUser!.name;
@@ -152,13 +159,12 @@ class SessionManager {
       visitedColorNotifier.value = vColor;
       plannedColorNotifier.value = pColor;
       nationalityColorNotifier.value = nColor;
-      
-      debugPrint("User data refreshed (including colors)");
     }
   }
 
   // --- ATUALIZAÇÃO DE CORES ---
 
+  // Muda as cores do mapa no DB e sincroniza com o HomeWidget (Android)
   Future<void> updateMapColors({Color? visited, Color? planned, Color? nationality}) async {
     final uid = _auth.currentUser?.uid;
     if (uid == null) return;
@@ -188,7 +194,7 @@ class SessionManager {
 
     try {
       await _db.collection('users').doc(uid).update(updates);
-      // Notifica o sistema Android que o Widget precisa de ser redesenhado com as novas cores
+      // Notifica o Android para atualizar o desenho do widget no homescreen
       await HomeWidget.updateWidget(name: 'MapWidgetProvider', androidName: 'MapWidgetProvider');
     } catch (e) {
       debugPrint("Erro ao atualizar cores no Firebase: $e");
@@ -197,16 +203,22 @@ class SessionManager {
 
   // --- SOCIAL / AMIGOS ---
 
+  // Cria um pedido de amizade no Firestore para outro utilizador
   Future<String> sendFriendRequest(String code) async {
     try {
       final currentUserId = _auth.currentUser?.uid;
       if (currentUserId == null || _currentUser == null) return "Erro de sessão";
       final cleanCode = code.toUpperCase().trim();
+      
+      // Procura o utilizador pelo código
       final query = await _db.collection('users').where('friendCode', isEqualTo: cleanCode).get();
       if (query.docs.isEmpty) return "User not found.";
+      
       final targetId = query.docs.first.id;
       if (targetId == currentUserId) return "You can't add yourself.";
       if (_currentUser!.friends.contains(targetId)) return "Already friends.";
+
+      // Regista o pedido na coleção friend_requests
       await _db.collection('friend_requests').doc("${currentUserId}_$targetId").set({
         'from': currentUserId,
         'to': targetId,
@@ -218,6 +230,7 @@ class SessionManager {
     } catch (e) { return "Error: $e"; }
   }
 
+  // Aceita o pedido e adiciona o ID à lista de amigos de ambos os utilizadores
   Future<void> acceptFriendRequest(String requestId, String fromUserId) async {
     try {
       final currentUserId = _auth.currentUser!.uid;
@@ -228,15 +241,18 @@ class SessionManager {
     } catch (e) { debugPrint("Error accepting friend: $e"); }
   }
 
+  // Elimina o documento do pedido de amizade
   Future<void> rejectFriendRequest(String requestId) async {
     await _db.collection('friend_requests').doc(requestId).delete();
   }
 
+  // Stream para ouvir novos pedidos de amizade em tempo real
   Stream<QuerySnapshot> getIncomingRequestsStream() {
     final currentUserId = _auth.currentUser?.uid;
     return _db.collection('friend_requests').where('to', isEqualTo: currentUserId).where('status', isEqualTo: 'pending').snapshots();
   }
 
+  // Stream para obter os dados (nome, foto, etc) da lista de amigos
   Stream<List<Map<String, dynamic>>> getFriendsListStream() {
     if (_currentUser == null || _currentUser!.friends.isEmpty) return Stream.value([]);
     return _db.collection('users').where(FieldPath.documentId, whereIn: _currentUser!.friends).snapshots().map((snapshot) => snapshot.docs.map((doc) => {'id': doc.id, ...doc.data()}).toList());
@@ -263,6 +279,7 @@ class SessionManager {
 
   // --- LÓGICA DO MAPA ---
 
+  // Marca um país como visitado (e remove-o da lista de planeados se lá estiver)
   Future<void> toggleVisitedForCurrentUser(String countryCode) async {
     if (_currentUser == null) return;
     final String code = countryCode.toUpperCase();
@@ -275,6 +292,7 @@ class SessionManager {
     await refreshUserData();
   }
 
+  // Marca um país como planeado (apenas se ainda não foi visitado)
   Future<void> togglePlannedForCurrentUser(String countryCode) async {
     if (_currentUser == null) return;
     final String code = countryCode.toUpperCase();
@@ -288,11 +306,13 @@ class SessionManager {
     await refreshUserData();
   }
 
+  // Métodos auxiliares de consulta de estado
   bool isCountryVisitedForCurrentUser(String code) => _currentUser?.visitedCountries.contains(code.toUpperCase()) ?? false;
   bool isCountryPlannedForCurrentUser(String code) => _currentUser?.plannedCountries.contains(code.toUpperCase()) ?? false;
   List<String> getVisitedCountriesForCurrentUser() => _currentUser?.visitedCountries.toList() ?? [];
   List<String> getFriendsForCurrentUser() => _currentUser?.friends ?? [];
 
+  // Atualiza as nacionalidades do utilizador
   Future<void> updateNationalities(List<String> codes) async {
     final uid = _auth.currentUser?.uid;
     if (uid == null) return;
@@ -300,6 +320,7 @@ class SessionManager {
     await refreshUserData(); 
   }
 
+  // Repõe as cores originais da aplicação
   Future<void> resetMapColors() async {
     const Color defaultVisited = Color(0xFF1F83D4);
     const Color defaultPlanned = Color(0xFF061094);
@@ -312,6 +333,7 @@ class SessionManager {
     );
   }
 
+  // Remove um amigo da lista (em ambos os perfis)
   Future<void> removeFriend(String friendId) async {
     if (_currentUser == null) return;
     final currentUserId = _auth.currentUser!.uid;

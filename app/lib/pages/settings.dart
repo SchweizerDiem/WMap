@@ -4,7 +4,7 @@ import '../session_manager.dart';
 import '../country_names.dart';
 
 class SettingsPage extends StatefulWidget {
-  final VoidCallback? onBackPressed;
+  final VoidCallback? onBackPressed; // Callback para atualizar o mapa ao retornar
   const SettingsPage({super.key, this.onBackPressed});
 
   @override
@@ -18,6 +18,7 @@ class _SettingsPageState extends State<SettingsPage> {
   @override
   void initState() {
     super.initState();
+    // Inicializa o campo de texto com o nome atual do utilizador na sessão
     _nameController.text = SessionManager().getCurrentUser()?.name ?? '';
   }
 
@@ -27,6 +28,7 @@ class _SettingsPageState extends State<SettingsPage> {
     super.dispose();
   }
 
+  /// Converte código ISO de país (ex: PT) para o respetivo Emoji de bandeira
   String _countryCodeToEmoji(String countryCode) {
     final code = countryCode.toUpperCase();
     if (code.length != 2) return '';
@@ -36,6 +38,7 @@ class _SettingsPageState extends State<SettingsPage> {
     return String.fromCharCode(first) + String.fromCharCode(second);
   }
 
+  /// Exibe um diálogo interativo para selecionar múltiplas nacionalidades
   Future<void> _showNationalitySettingsPicker() async {
     final session = SessionManager();
     final user = session.getCurrentUser();
@@ -48,7 +51,7 @@ class _SettingsPageState extends State<SettingsPage> {
       context: context,
       builder: (context) {
         final searchController = TextEditingController();
-        return StatefulBuilder(
+        return StatefulBuilder( // Permite atualizar o estado interno do diálogo (pesquisa e checks)
           builder: (context, setInternalState) {
             final query = searchController.text.toLowerCase();
             final filtered = countries.where((c) => c['name']!.toLowerCase().contains(query)).toList();
@@ -62,7 +65,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   children: [
                     TextField(
                       controller: searchController,
-                      onChanged: (_) => setInternalState(() {}),
+                      onChanged: (_) => setInternalState(() {}), // Recalcula a lista filtrada
                       decoration: InputDecoration(
                         hintText: 'Search country...',
                         prefixIcon: const Icon(Icons.search),
@@ -113,7 +116,7 @@ class _SettingsPageState extends State<SettingsPage> {
       setState(() => _isLoading = true);
       try {
         await session.updateNationalities(selected);
-        // Após mudar nacionalidade, voltamos ao mapa para atualizar o widget
+        // Notifica o componente pai para atualizar cores de nacionalidade no mapa
         if (widget.onBackPressed != null) widget.onBackPressed!();
       } finally {
         if (mounted) setState(() => _isLoading = false);
@@ -140,6 +143,7 @@ class _SettingsPageState extends State<SettingsPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                // Secção de Edição do Nome de Perfil
                 Card(
                   child: Padding(
                     padding: const EdgeInsets.all(16.0),
@@ -183,6 +187,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
                 const SizedBox(height: 16),
 
+                // Lista de opções de configuração
                 Card(
                   child: Column(
                     children: [
@@ -211,6 +216,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
                 const SizedBox(height: 32),
 
+                // Botão de Logout
                 ElevatedButton(
                   onPressed: () async {
                     await SessionManager().logout();
@@ -227,6 +233,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
                 const SizedBox(height: 16),
 
+                // Botão crítico: Eliminação de conta
                 ElevatedButton(
                   onPressed: () => _confirmDeleteAccount(),
                   style: ElevatedButton.styleFrom(
@@ -242,6 +249,7 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
+  /// Diálogo de confirmação para evitar eliminação acidental de dados
   void _confirmDeleteAccount() {
     showDialog(
       context: context,
@@ -271,7 +279,7 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 }
 
-// --- PAGINA DE CUSTOMIZAÇÃO ATUALIZADA ---
+// --- PÁGINA DE PERSONALIZAÇÃO DE CORES DO MAPA ---
 
 class MapCustomizationPage extends StatefulWidget {
   final VoidCallback? onSave;
@@ -282,6 +290,7 @@ class MapCustomizationPage extends StatefulWidget {
 }
 
 class _MapCustomizationPageState extends State<MapCustomizationPage> {
+  // Estados temporários para as cores antes de persistir no SessionManager
   late Color tempVisited;
   late Color tempPlanned;
   late Color tempNationality;
@@ -296,6 +305,7 @@ class _MapCustomizationPageState extends State<MapCustomizationPage> {
     tempNationality = session.nationalityColorNotifier.value;
   }
 
+  /// Abre o ColorPicker do pacote externo para selecionar uma nova cor
   void _pickColor(String type, Color currentColor) {
     showDialog(
       context: context,
@@ -312,7 +322,7 @@ class _MapCustomizationPageState extends State<MapCustomizationPage> {
                 _hasChanges = true;
               });
             },
-            enableAlpha: false,
+            enableAlpha: false, // Cores sólidas funcionam melhor no mapa
             labelTypes: const [],
           ),
         ),
@@ -337,6 +347,7 @@ class _MapCustomizationPageState extends State<MapCustomizationPage> {
                 _tempColorTile("Planned Trips", tempPlanned, () => _pickColor('Planned', tempPlanned)),
                 _tempColorTile("Your Nationalities", tempNationality, () => _pickColor('Nationality', tempNationality)),
                 const SizedBox(height: 20),
+                // Botão para reverter para o esquema original do app
                 OutlinedButton.icon(
                   onPressed: () => _confirmReset(),
                   icon: const Icon(Icons.restore, color: Colors.grey),
@@ -345,7 +356,7 @@ class _MapCustomizationPageState extends State<MapCustomizationPage> {
               ],
             ),
           ),
-          // BOTÃO DE SAVE FINAL
+          // Botão que efetivamente guarda as alterações na sessão
           Padding(
             padding: const EdgeInsets.all(20.0),
             child: ElevatedButton(
@@ -358,8 +369,8 @@ class _MapCustomizationPageState extends State<MapCustomizationPage> {
                 );
                 
                 if (mounted && widget.onSave != null) {
-                  widget.onSave!(); // Volta para o Mapa
-                  Navigator.pop(context); // Fecha esta página
+                  widget.onSave!(); // Atualiza o widget do Mapa
+                  Navigator.pop(context); // Regressa às Settings
                 }
               } : null,
               style: ElevatedButton.styleFrom(
@@ -376,6 +387,7 @@ class _MapCustomizationPageState extends State<MapCustomizationPage> {
     );
   }
 
+  /// Construtor de itens da lista de cores com preview circular
   Widget _tempColorTile(String title, Color color, VoidCallback onTap) {
     return Card(
       margin: const EdgeInsets.only(bottom: 12),

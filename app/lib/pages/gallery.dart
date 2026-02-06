@@ -7,6 +7,7 @@ import '../country_names.dart';
 import '../country_photo_manager.dart';
 
 // --- NOVO WIDGET PARA O VISUALIZADOR COM SWIPE ---
+// Widget responsável por abrir a foto em ecrã inteiro, permitindo deslizar entre elas e fazer zoom.
 class PhotoViewPage extends StatefulWidget {
   final List<File> photos;
   final int initialIndex;
@@ -40,6 +41,7 @@ class _PhotoViewPageState extends State<PhotoViewPage> {
     _pageController = PageController(initialPage: widget.initialIndex);
   }
 
+  // Função para apagar a foto que está a ser visualizada no momento
   Future<void> _deleteCurrentPhoto() async {
     final confirm = await showDialog<bool>(
       context: context,
@@ -60,6 +62,7 @@ class _PhotoViewPageState extends State<PhotoViewPage> {
       final photoToDelete = _localPhotos[_currentIndex];
       
       try {
+        // Remove a foto fisicamente através do gestor de fotos
         await widget.photoManager.removePhotos(
           widget.countryCode,
           [photoToDelete],
@@ -68,9 +71,11 @@ class _PhotoViewPageState extends State<PhotoViewPage> {
 
         setState(() {
           _localPhotos.removeAt(_currentIndex);
+          // Se não sobrarem fotos, fecha o visualizador automaticamente
           if (_localPhotos.isEmpty) {
             Navigator.pop(context);
           } else {
+            // Ajusta o índice caso a foto apagada seja a última da lista
             if (_currentIndex >= _localPhotos.length) {
               _currentIndex = _localPhotos.length - 1;
             }
@@ -91,7 +96,7 @@ class _PhotoViewPageState extends State<PhotoViewPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: Colors.black, // Fundo preto para destaque da imagem
       appBar: AppBar(
         backgroundColor: Colors.black,
         iconTheme: const IconThemeData(color: Colors.white),
@@ -104,11 +109,13 @@ class _PhotoViewPageState extends State<PhotoViewPage> {
           ),
         ],
       ),
+      // PageView permite o efeito de deslizar lateralmente entre as imagens
       body: PageView.builder(
         controller: _pageController,
         itemCount: _localPhotos.length,
         onPageChanged: (index) => setState(() => _currentIndex = index),
         itemBuilder: (context, index) {
+          // InteractiveViewer permite fazer zoom (pinch-to-zoom) na imagem
           return InteractiveViewer(
             child: Center(
               child: Image.file(_localPhotos[index], fit: BoxFit.contain),
@@ -121,6 +128,7 @@ class _PhotoViewPageState extends State<PhotoViewPage> {
 }
 
 // --- CLASSE GALLERY PAGE ---
+// Página principal que lista os países e organiza as fotos em pastas e grelhas.
 class GalleryPage extends StatefulWidget {
   final VoidCallback? onBackPressed;
   const GalleryPage({super.key, this.onBackPressed});
@@ -135,18 +143,20 @@ class _GalleryPageState extends State<GalleryPage> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = "";
 
+  // Controlam o estado de seleção múltipla para apagar várias fotos de uma vez
   final Map<String, bool> _selectionMode = {};
   final Map<String, Set<String>> _selectedIndices = {};
 
   @override
   void initState() {
     super.initState();
+    // Prepara os dados assim que o ecrã é montado
     WidgetsBinding.instance.addPostFrameCallback((_) => _preloadData());
   }
 
+  // Carrega as fotos locais guardadas para cada país visitado ou nacionalidade
   Future<void> _preloadData() async {
     final user = SessionManager().getCurrentUser();
-    // Carregar dados de fotos tanto para visitados como para nacionalidades
     final Set<String> allToLoad = {
       ...(user?.nationalities ?? []),
       ...(user?.visitedCountries ?? []),
@@ -158,10 +168,10 @@ class _GalleryPageState extends State<GalleryPage> {
     if (mounted) setState(() {});
   }
 
+  // Filtra a lista de países com base no que o utilizador escreve na barra de pesquisa
   List<String> _getFilteredCountries() {
     final user = SessionManager().getCurrentUser();
     
-    // Une Nacionalidades e Visitados num Set único
     final Set<String> combined = {
       ...(user?.nationalities ?? []),
       ...(user?.visitedCountries ?? []),
@@ -174,6 +184,7 @@ class _GalleryPageState extends State<GalleryPage> {
     return sorted.where((code) => getCountryName(code).toLowerCase().contains(_searchQuery.toLowerCase())).toList();
   }
 
+  // Lógica para adicionar fotos: pergunta se quer criar uma pasta e depois abre a galeria do telemóvel
   Future<void> _uploadForCountry(String countryCode) async {
     try {
       final createFolder = await showDialog<bool>(
@@ -207,6 +218,7 @@ class _GalleryPageState extends State<GalleryPage> {
         if (folderName == null || folderName.isEmpty) return;
       }
 
+      // Permite selecionar múltiplas imagens da galeria do sistema
       final List<XFile>? picked = await _imagePicker.pickMultiImage();
       if (picked != null && picked.isNotEmpty) {
         final files = picked.map((x) => File(x.path)).toList();
@@ -218,6 +230,7 @@ class _GalleryPageState extends State<GalleryPage> {
     }
   }
 
+  // Remove todas as fotos marcadas durante o modo de seleção
   Future<void> _deleteSelected(String countryCode) async {
     final selectedKeys = _selectedIndices[countryCode];
     if (selectedKeys == null || selectedKeys.isEmpty) return;
@@ -260,6 +273,7 @@ class _GalleryPageState extends State<GalleryPage> {
     }
   }
 
+  // Ativa ou desativa a interface de seleção (checkboxes sobre as fotos)
   void _toggleSelectionMode(String countryCode, bool? value) {
     setState(() {
       _selectionMode[countryCode] = value ?? !( _selectionMode[countryCode] ?? false);
@@ -267,6 +281,7 @@ class _GalleryPageState extends State<GalleryPage> {
     });
   }
 
+  // Marca ou desmarca uma foto específica para eliminação
   void _toggleSelectIndex(String countryCode, String folderName, int index) {
     final set = _selectedIndices.putIfAbsent(countryCode, () => <String>{});
     final key = '$folderName::$index';
@@ -287,6 +302,7 @@ class _GalleryPageState extends State<GalleryPage> {
       ),
       body: Column(
         children: [
+          // Campo de pesquisa estilizado no topo
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: TextField(
@@ -302,6 +318,7 @@ class _GalleryPageState extends State<GalleryPage> {
               ),
             ),
           ),
+          // Lista de países filtrados
           Expanded(
             child: ListView.builder(
               padding: const EdgeInsets.all(12),
@@ -317,8 +334,8 @@ class _GalleryPageState extends State<GalleryPage> {
     );
   }
 
+  // Constrói o cartão visual de cada país (Bandeira, Nome e Secção de Fotos)
   Widget _buildCountryCard(String code, String name) {
-    // Normalização Kosovo (XK)
     String displayCode = code.toUpperCase();
     if (displayCode == 'KO' || displayCode == 'KOS') displayCode = 'XK';
 
@@ -330,7 +347,6 @@ class _GalleryPageState extends State<GalleryPage> {
           children: [
             Row(
               children: [
-                // Corrigido: usando a tua função buildFlag para as bandeiras
                 buildFlag(displayCode, width: 48, height: 32),
                 const SizedBox(width: 12),
                 Expanded(child: Text(name, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold))),
@@ -345,6 +361,7 @@ class _GalleryPageState extends State<GalleryPage> {
     );
   }
 
+  // Alterna entre botões de ação normais (upload/nota) e botões de seleção (apagar/cancelar)
   Widget _buildActionButtons(String code) {
     if (_selectionMode[code] ?? false) {
       return Row(
@@ -362,6 +379,7 @@ class _GalleryPageState extends State<GalleryPage> {
     );
   }
 
+  // Abre diálogo para escrever uma nota/recordação sobre o país
   Future<void> _showNoteDialog(String code) async {
     final controller = TextEditingController(text: _photoManager.getNote(code) ?? '');
     final result = await showDialog<String>(
@@ -378,6 +396,7 @@ class _GalleryPageState extends State<GalleryPage> {
     if (result != null) await _photoManager.setNote(code, result);
   }
 
+  // Widget reativo que mostra a nota escrita logo abaixo do nome do país
   Widget _buildNote(String code) {
     return ValueListenableBuilder<String?>(
       valueListenable: _photoManager.getNoteNotifier(code),
@@ -392,6 +411,7 @@ class _GalleryPageState extends State<GalleryPage> {
     );
   }
 
+  // Organiza a exibição: primeiro as pastas personalizadas, depois as fotos soltas
   Widget _buildFoldersAndPhotos(String code) {
     return ValueListenableBuilder<List<String>>(
       valueListenable: _photoManager.getFolderListNotifier(code),
@@ -406,6 +426,7 @@ class _GalleryPageState extends State<GalleryPage> {
     );
   }
 
+  // Cria um componente expansível para cada pasta dentro de um país
   Widget _buildFolderTile(String code, String folder) {
     return ValueListenableBuilder<List<File>>(
       valueListenable: _photoManager.getFolderNotifier(code, folder),
@@ -420,6 +441,7 @@ class _GalleryPageState extends State<GalleryPage> {
     );
   }
 
+  // Mostra fotos que não pertencem a nenhuma pasta específica (General Photos)
   Widget _buildRootPhotos(String code) {
     return ValueListenableBuilder<List<File>>(
       valueListenable: _photoManager.getNotifierForCountry(code),
@@ -433,21 +455,23 @@ class _GalleryPageState extends State<GalleryPage> {
     );
   }
 
+  // Constrói a grelha de imagens propriamente dita com suporte para toque longo (seleção)
   Widget _buildPhotoGrid(String code, String folder, List<File> photos) {
     final isSelecting = _selectionMode[code] ?? false;
     return GridView.builder(
-      shrinkWrap: true,
+      shrinkWrap: true, // Importante para funcionar dentro de listas/ExpansionTiles
       physics: const NeverScrollableScrollPhysics(),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 3, crossAxisSpacing: 4, mainAxisSpacing: 4),
       itemCount: photos.length,
       itemBuilder: (context, i) {
         final isSelected = _selectedIndices[code]?.contains('$folder::$i') ?? false;
         return GestureDetector(
-          onLongPress: () => _toggleSelectionMode(code, true),
+          onLongPress: () => _toggleSelectionMode(code, true), // Inicia modo seleção
           onTap: () {
             if (isSelecting) {
               _toggleSelectIndex(code, folder, i);
             } else {
+              // Abre a foto em ecrã inteiro no visualizador
               Navigator.push(
                 context,
                 MaterialPageRoute(
@@ -466,6 +490,7 @@ class _GalleryPageState extends State<GalleryPage> {
             fit: StackFit.expand,
             children: [
               Image.file(photos[i], fit: BoxFit.cover),
+              // Sobreposição visual (overlay) se a foto estiver selecionada
               if (isSelecting)
                 Container(
                   color: isSelected ? Colors.blue.withOpacity(0.3) : Colors.transparent,

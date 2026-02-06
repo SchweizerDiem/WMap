@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 
-// Notificador global para o nome de exibição do utilizador.
-// Atualizado automaticamente após o login/registo via Firebase.
+// Este é um Notificador Global (ValueNotifier).
+// Ele guarda uma String e avisa automaticamente todos os widgets que o estão a "ouvir" 
+// sempre que o nome do utilizador muda (por exemplo, de 'Guest' para o nome real após o login).
 final ValueNotifier<String> userNameNotifier = ValueNotifier<String>('Guest');

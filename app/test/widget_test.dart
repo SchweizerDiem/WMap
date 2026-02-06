@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:app/main.dart';
-import 'package:app/pages/welcome.dart'; // Importa a WelcomePage
+import 'package:WMap/main.dart';
+import 'package:WMap/pages/welcome.dart'; // Importa a WelcomePage
 
 void main() {
   testWidgets('Verificar se a Welcome Page carrega corretamente', (WidgetTester tester) async {

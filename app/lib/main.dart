@@ -16,11 +16,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:path_provider/path_provider.dart'; 
 import 'package:home_widget/home_widget.dart'; 
 
-// IMPORTS CORRIGIDOS (Apenas Dart, sem erro de Gradle)
+// Bibliotecas para gestão de fusos horários e localização de tempo
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 
-// Pages
+// Importação das páginas e gestores de estado da aplicação
 import './pages/welcome.dart';
 import './pages/login.dart';
 import './pages/register.dart';
@@ -32,10 +32,14 @@ import 'session_manager.dart';
 import 'country_names.dart';
 
 // --- FUNÇÕES UTILITÁRIAS GLOBAIS ---
+
+// Padroniza os códigos de país para letras minúsculas (ex: 'PT')
 String normalizeCountryCode(String code) {
   return code.toLowerCase();
 }
 
+// Constrói o widget da bandeira. Inclui uma correção específica para o Kosovo (XK)
+// que muitas vezes não existe em pacotes padrão de bandeiras.
 Widget buildFlag(String code, {double width = 40, double height = 24}) {
   final cleanCode = code.toUpperCase();
   if (cleanCode == 'XK') {
@@ -59,9 +63,10 @@ Widget buildFlag(String code, {double width = 40, double height = 24}) {
 }
 
 void main() async {
+  // Garante que os serviços nativos estão prontos antes de iniciar o Firebase/Plugins
   WidgetsFlutterBinding.ensureInitialized();
   
-  // 1. INICIALIZAÇÃO DA BASE DE DADOS DE TEMPO (IANA)
+  // Inicializa a base de dados de fusos horários IANA
   tz.initializeTimeZones();
 
   try {
@@ -70,12 +75,14 @@ void main() async {
     debugPrint("Firebase init error: $e");
   }
 
+  // Verifica se o utilizador marcou "lembrar-me" e se já existe uma sessão ativa
   final prefs = await SharedPreferences.getInstance();
   final bool rememberMe = prefs.getBool('remember_me') ?? false;
   final user = FirebaseAuth.instance.currentUser;
 
   Widget initialScreen;
 
+  // Lógica de encaminhamento inicial (Home ou Welcome)
   if (rememberMe && user != null) {
     final session = SessionManager();
     await session.refreshUserData(); 
@@ -116,10 +123,12 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  bool _isUpdatingWidget = false;
-  int currentPageIndex = 0;
+  bool _isUpdatingWidget = false; // Controla o overlay de carregamento do widget
+  int currentPageIndex = 0; // Índice da barra de navegação inferior
   final TextEditingController _searchController = TextEditingController();
+  // Controlador para gerir o zoom e posição do mapa
   final TransformationController _transformationController = TransformationController();
+  // Chave para identificar o mapa e permitir tirar "print" dele
   final GlobalKey _mapKey = GlobalKey(); 
   Set<String> _nationalityCountries = <String>{};
 
@@ -127,11 +136,13 @@ class _HomePageState extends State<HomePage> {
   void initState() {
     super.initState();
 
+    // Adiciona ouvintes para atualizar a UI quando as cores globais mudarem
     final session = SessionManager();
     session.visitedColorNotifier.addListener(_onColorChanged);
     session.plannedColorNotifier.addListener(_onColorChanged);
     session.nationalityColorNotifier.addListener(_onColorChanged);
 
+    // Define o zoom inicial do mapa focado numa área específica
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         setState(() {
@@ -142,6 +153,7 @@ class _HomePageState extends State<HomePage> {
       }
     });
     
+    // Carrega dados do utilizador e verifica se precisa definir nacionalidade
     Future.delayed(Duration.zero, () async {
       await session.refreshUserData();
       final user = session.getCurrentUser();
@@ -160,6 +172,7 @@ class _HomePageState extends State<HomePage> {
 
   @override
   void dispose() {
+    // Limpeza de recursos para evitar fugas de memória
     final session = SessionManager();
     session.visitedColorNotifier.removeListener(_onColorChanged);
     session.plannedColorNotifier.removeListener(_onColorChanged);
@@ -175,16 +188,20 @@ class _HomePageState extends State<HomePage> {
   }
 
   // --- LÓGICA DO WIDGET ---
+  // Esta função tira uma "foto" do mapa atual e envia para o widget do Android
   Future<void> _updateWidgetMap() async {
     if (!mounted || currentPageIndex != 0 || _mapKey.currentContext == null) return;
     
     try {
       setState(() => _isUpdatingWidget = true);
+      
+      // Guarda posição original e faz reset ao zoom para capturar o mapa inteiro
       final originalMatrix = Matrix4.fromFloat64List(_transformationController.value.storage);
       _transformationController.value = Matrix4.identity(); 
 
       await Future.delayed(const Duration(milliseconds: 500)); 
 
+      // Converte o RenderBox do mapa numa imagem PNG
       final RenderRepaintBoundary? boundary = _mapKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
       if (boundary != null) {
         ui.Image image = await boundary.toImage(pixelRatio: 2.0);
@@ -194,15 +211,18 @@ class _HomePageState extends State<HomePage> {
           final imagePath = '${directory.path}/map_snapshot.png';
           await File(imagePath).writeAsBytes(byteData.buffer.asUint8List());
           
+          // Guarda o caminho da imagem e o contador para o plugin home_widget
           await HomeWidget.saveWidgetData<String>('map_image_path', imagePath);
           final session = SessionManager();
           final visitedCount = session.getVisitedCountriesForCurrentUser().length;
           await HomeWidget.saveWidgetData<String>('visited_count_text', 'Visited: $visitedCount/250');
           
+          // Força o Android a redesenhar o widget
           await HomeWidget.updateWidget(name: 'MapWidgetProvider', androidName: 'MapWidgetProvider');
         }
       }
 
+      // Restaura o zoom original do utilizador
       _transformationController.value = originalMatrix; 
       setState(() => _isUpdatingWidget = false);
 
@@ -213,24 +233,15 @@ class _HomePageState extends State<HomePage> {
   }
 
   // --- LÓGICA DE TEMPO ROBUSTA (OFFLINE) ---
+  // Obtém a hora atual de um país usando mapeamento IANA ou offset UTC
   String _getCountryTime(String countryCode, List<dynamic> timezones) {
     try {
       final Map<String, String> codeToLocation = {
-        'PT': 'Europe/Lisbon',
-        'ES': 'Europe/Madrid',
-        'GB': 'Europe/London',
-        'FR': 'Europe/Paris',
-        'DE': 'Europe/Berlin',
-        'IT': 'Europe/Rome',
-        'BR': 'America/Sao_Paulo',
-        'US': 'America/New_York',
-        'JP': 'Asia/Tokyo',
-        'CN': 'Asia/Shanghai',
-        'RU': 'Europe/Moscow',
-        'AO': 'Africa/Luanda',
-        'CV': 'Atlantic/Cape_Verde',
-        'CH': 'Europe/Zurich',
-        'BE': 'Europe/Brussels',
+        'PT': 'Europe/Lisbon', 'ES': 'Europe/Madrid', 'GB': 'Europe/London',
+        'FR': 'Europe/Paris', 'DE': 'Europe/Berlin', 'IT': 'Europe/Rome',
+        'BR': 'America/Sao_Paulo', 'US': 'America/New_York', 'JP': 'Asia/Tokyo',
+        'CN': 'Asia/Shanghai', 'RU': 'Europe/Moscow', 'AO': 'Africa/Luanda',
+        'CV': 'Atlantic/Cape_Verde', 'CH': 'Europe/Zurich', 'BE': 'Europe/Brussels',
         'NL': 'Europe/Amsterdam',
       };
 
@@ -242,6 +253,7 @@ class _HomePageState extends State<HomePage> {
         return DateFormat('HH:mm').format(now);
       }
 
+      // Fallback: se não estiver no mapa, calcula manualmente pelo offset (ex: UTC+02:00)
       if (timezones.isNotEmpty) {
         return _calculateTimeFromOffset(timezones[0].toString());
       }
@@ -252,6 +264,7 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  // Calcula a hora baseado na string de offset UTC (ex: "UTC+05:30")
   String _calculateTimeFromOffset(String offsetStr) {
     try {
       DateTime nowUtc = DateTime.now().toUtc();
@@ -275,6 +288,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   // --- LÓGICA DA API ---
+  // Procura dados detalhados do país no serviço RestCountries
   Future<Map<String, dynamic>?> _fetchCountryData(String code) async {
     try {
       final response = await http.get(Uri.parse('https://restcountries.com/v3.1/alpha/$code'));
@@ -285,6 +299,7 @@ class _HomePageState extends State<HomePage> {
         String currencyName = (country['currencies'] as Map?)?.values.first['name'] ?? 'N/A';
         String currencySymbol = (country['currencies'] as Map?)?.values.first['symbol'] ?? '';
 
+        // Correção manual para países que mudaram de moeda ou têm dados desatualizados na API
         if (code.toUpperCase() == 'BG') {
           currencyName = 'Euro';
           currencySymbol = '€';
@@ -311,7 +326,7 @@ class _HomePageState extends State<HomePage> {
     return null;
   }
 
-  // ... (Restante do código original mantido exatamente igual: _showCountryInfoSheet, _buildDetailsGrid, etc.)
+  // Exibe o painel inferior (Bottom Sheet) com informações do país clicado
   void _showCountryInfoSheet(BuildContext context, String countryCode, String countryName) {
     showModalBottomSheet(
       context: context,
@@ -327,10 +342,7 @@ class _HomePageState extends State<HomePage> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Container(
-                width: 40, height: 5,
-                decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(10)),
-              ),
+              Container(width: 40, height: 5, decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(10))),
               const SizedBox(height: 20),
               Row(
                 children: [
@@ -344,12 +356,11 @@ class _HomePageState extends State<HomePage> {
                     ),
                   ),
                   const SizedBox(width: 15),
-                  Expanded(
-                    child: Text(countryName, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-                  ),
+                  Expanded(child: Text(countryName, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold))),
                 ],
               ),
               const Divider(height: 30),
+              // Carrega os dados da API enquanto mostra um carregamento
               FutureBuilder<Map<String, dynamic>?>(
                 future: _fetchCountryData(countryCode),
                 builder: (context, snapshot) {
@@ -372,10 +383,12 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  // Constrói a grelha de detalhes (População, Capital, Moeda, etc.)
   Widget _buildDetailsGrid(Map<String, dynamic> data) {
     final f = NumberFormat.compact();
     return Column(
       children: [
+        // Widget da Hora Local destacado
         Container(
           width: double.infinity,
           padding: const EdgeInsets.all(15),
@@ -431,6 +444,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  // Widget para cada item individual de informação (Ícone + Rótulo + Valor)
   Widget _infoTile(IconData icon, String label, String value) {
     final displayValue = value.replaceAll(', ', '\n');
     return Row(
@@ -452,6 +466,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  // Constrói os botões de "Visitado" e "Planeado"
   Widget _buildActionButtons(BuildContext context, String code) {
     final session = SessionManager();
     final isNationality = _nationalityCountries.map((e) => e.toUpperCase()).contains(code.toUpperCase());
@@ -466,6 +481,7 @@ class _HomePageState extends State<HomePage> {
 
       return Row(
         children: [
+          // Botão de Visitado
           Expanded(
             child: ElevatedButton.icon(
               icon: Icon(isVisited ? Icons.check : Icons.add),
@@ -478,11 +494,12 @@ class _HomePageState extends State<HomePage> {
                 await session.toggleVisitedForCurrentUser(code);
                 setInternalState(() {}); 
                 setState(() {}); 
-                _updateWidgetMap(); 
+                _updateWidgetMap(); // Atualiza o widget após alteração
               },
             ),
           ),
           const SizedBox(width: 10),
+          // Botão de Planeado
           Expanded(
             child: ElevatedButton.icon(
               icon: Icon(isPlanned ? Icons.bookmark : Icons.bookmark_border),
@@ -504,6 +521,7 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
+  // Caixa de diálogo para o utilizador escolher o(s) seu(s) país(es) de origem
   Future<void> _showNationalityPicker() async {
     final countries = countryNames.entries.map((e) => {'code': e.key, 'name': e.value}).toList();
     final selected = await showDialog<List<String>>(
@@ -557,10 +575,12 @@ class _HomePageState extends State<HomePage> {
         title: SvgPicture.asset("assets/images/airplane-tilt.svg", width: 40),
         automaticallyImplyLeading: false,
       ),
+      // Barra de navegação inferior que controla o conteúdo do body
       bottomNavigationBar: NavigationBar(
         onDestinationSelected: (int index) {
           setState(() => currentPageIndex = index);
           if (index == 0) {
+            // Pequeno atraso para garantir que a transição acabou antes de atualizar o widget
             Future.delayed(const Duration(milliseconds: 600), () {
               if (mounted) _updateWidgetMap();
             });
@@ -576,11 +596,13 @@ class _HomePageState extends State<HomePage> {
         ],
       ),
 
+      // Exibe a página correspondente ao índice selecionado
       body: <Widget>[
         Stack(
           children: [
             Column(
               children: [
+                // Barra de pesquisa de países no mapa
                 Padding(
                   padding: const EdgeInsets.all(12.0),
                   child: TextField(
@@ -593,6 +615,7 @@ class _HomePageState extends State<HomePage> {
                     ),
                   ),
                 ),
+                // Se estiver a pesquisar, mostra lista. Se não, mostra o Mapa.
                 _searchController.text.isNotEmpty
                     ? _buildSearchResults()
                     : Expanded(
@@ -603,6 +626,7 @@ class _HomePageState extends State<HomePage> {
                             maxScale: 20.0,
                             minScale: 1.0,
                             child: AnimatedBuilder( 
+                              // Ouve vários notifiers para repintar o mapa quando algo muda
                               animation: Listenable.merge([
                                 SessionManager().visitedCountNotifier,
                                 SessionManager().visitedColorNotifier,
@@ -616,6 +640,7 @@ class _HomePageState extends State<HomePage> {
                                 final planned = user?.plannedCountries ?? {};
                                 final nationalities = user?.nationalities ?? []; 
                                 
+                                // Mapeia cada país à sua cor correspondente (Visitado, Planeado ou Origem)
                                 final Map<String, Color> colorMap = {};
 
                                 for (var code in planned) {
@@ -645,6 +670,7 @@ class _HomePageState extends State<HomePage> {
                       ),
               ],
             ),
+            // Overlay de carregamento enquanto o widget do Android está a ser gerado
             if (_isUpdatingWidget)
               Positioned.fill(
                 child: Container(
@@ -663,6 +689,7 @@ class _HomePageState extends State<HomePage> {
               ),
           ],
         ),
+        // Outras páginas da aplicação
         const FriendsPage(),
         GalleryPage(onBackPressed: () => setState(() => currentPageIndex = 0)),
         ProfilePage(onBackPressed: () => setState(() => currentPageIndex = 0)),
@@ -676,6 +703,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  // Lista de resultados quando o utilizador escreve na barra de pesquisa
   Widget _buildSearchResults() {
     final query = _searchController.text.toLowerCase();
     final filtered = countryNames.entries.where((entry) => entry.value.toLowerCase().contains(query)).toList();

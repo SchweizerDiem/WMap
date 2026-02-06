@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:country_flags/country_flags.dart' as country_flags;
 
-/// Small utility map and getter for country code -> country name.
+// Mapa utilitário que associa o código ISO de duas letras (Key) ao nome completo do país (Value).
+// Essencial para converter dados técnicos (como "PT") em nomes amigáveis para o utilizador ("Portugal").
 const Map<String, String> countryNames = {
   'AF': 'Afghanistan', 'AL': 'Albania', 'DZ': 'Algeria', 'AD': 'Andorra',
   'AO': 'Angola', 'AG': 'Antigua and Barbuda', 'AR': 'Argentina', 'AM': 'Armenia',
@@ -56,14 +57,18 @@ const Map<String, String> countryNames = {
   'ZW': 'Zimbabwe', 'XK':'Kosovo', 'EH':'Western Sahara'
 };
 
+// Função que recebe um código (ex: "pt" ou "PT") e devolve o nome completo.
+// Se o código não for encontrado, devolve o próprio código como fallback.
 String getCountryName(String code) {
   if (code.isEmpty) return code;
-  final key = code.toUpperCase();
+  final key = code.toUpperCase(); // Garante que a pesquisa ignore maiúsculas/minúsculas
   return countryNames[key] ?? code;
 }
 
-
+// Widget utilitário para renderizar a bandeira de um país.
+// Resolve a limitação de bibliotecas externas que podem não incluir estados com reconhecimento limitado.
 Widget buildFlag(String code, {double width = 40, double height = 25}) {
+  // Tratamento especial para o Kosovo (XK), que muitas vezes não consta em pacotes padrão de bandeiras.
   if (code.toUpperCase() == 'XK') {
     return Container(
       width: width,
@@ -78,6 +83,8 @@ Widget buildFlag(String code, {double width = 40, double height = 25}) {
       ),
     );
   }
+  
+  // Para todos os outros países, utiliza a biblioteca 'country_flags' para desenhar a bandeira.
   return SizedBox(
     width: width,
     height: height,
