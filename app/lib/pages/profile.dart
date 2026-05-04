@@ -36,16 +36,18 @@ class _ProfilePageState extends State<ProfilePage> {
   // Abre a galeria do sistema para o utilizador escolher uma nova foto de perfil
   Future<void> _pickImageFromGallery() async {
     try {
-      final XFile? pickedFile = await _imagePicker.pickImage(source: ImageSource.gallery);
+      final XFile? pickedFile = await _imagePicker.pickImage(
+        source: ImageSource.gallery,
+      );
       if (pickedFile != null) {
         // Atualiza a imagem através do manager (que trata do armazenamento e notificação da UI)
         _profileManager.setProfileImage(File(pickedFile.path));
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error picking image: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error picking image: $e')));
       }
     }
   }
@@ -57,7 +59,10 @@ class _ProfilePageState extends State<ProfilePage> {
         title: const Text('Profile'),
         // Define se mostra o botão de voltar com base na origem da página
         leading: widget.onBackPressed != null
-            ? IconButton(icon: const Icon(Icons.arrow_back), onPressed: widget.onBackPressed)
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back),
+                onPressed: widget.onBackPressed,
+              )
             : null,
       ),
       body: SingleChildScrollView(
@@ -79,8 +84,16 @@ class _ProfilePageState extends State<ProfilePage> {
                         return CircleAvatar(
                           radius: 40,
                           backgroundColor: Colors.grey[300],
-                          backgroundImage: profileImage != null ? FileImage(profileImage) : null,
-                          child: profileImage == null ? const Icon(Icons.person, size: 40, color: Colors.white) : null,
+                          backgroundImage: profileImage != null
+                              ? FileImage(profileImage)
+                              : null,
+                          child: profileImage == null
+                              ? const Icon(
+                                  Icons.person,
+                                  size: 40,
+                                  color: Colors.white,
+                                )
+                              : null,
                         );
                       },
                     ),
@@ -99,67 +112,89 @@ class _ProfilePageState extends State<ProfilePage> {
                             valueListenable: userNameNotifier,
                             builder: (context, name, child) => Text(
                               name.isEmpty ? 'Guest' : name,
-                              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                              style: const TextStyle(
+                                fontSize: 22,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                           ),
                           const SizedBox(width: 8),
                           // Bandeiras das Nacionalidades do utilizador
-                          Builder(builder: (context) {
-                            final user = SessionManager().getCurrentUser();
-                            final nationalities = user?.nationalities ?? [];
-                            return Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: nationalities.map((code) {
-                                String displayCode = code.toUpperCase();
-                                // Normalização para o código do Kosovo
-                                if (displayCode == 'KO' || displayCode == 'KOS') displayCode = 'XK';
-                                return Padding(
-                                  padding: const EdgeInsets.only(right: 4),
-                                  child: buildFlag(displayCode, width: 22, height: 16),
-                                );
-                              }).toList(),
-                            );
-                          }),
+                          Builder(
+                            builder: (context) {
+                              final user = SessionManager().getCurrentUser();
+                              final nationalities = user?.nationalities ?? [];
+                              return Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: nationalities.map((code) {
+                                  String displayCode = code.toUpperCase();
+                                  // Normalização para o código do Kosovo
+                                  if (displayCode == 'KO' ||
+                                      displayCode == 'KOS')
+                                    displayCode = 'XK';
+                                  return Padding(
+                                    padding: const EdgeInsets.only(right: 4),
+                                    child: buildFlag(
+                                      displayCode,
+                                      width: 22,
+                                      height: 16,
+                                    ),
+                                  );
+                                }).toList(),
+                              );
+                            },
+                          ),
                         ],
                       ),
                       const SizedBox(height: 4),
                       // FRIEND CODE (Com funcionalidade de copiar para a área de transferência)
-                      Builder(builder: (context) {
-                        final code = SessionManager().getCurrentUser()?.friendCode ?? '---';
-                        return InkWell(
-                          onTap: () {
-                            if (code != '---') {
-                              Clipboard.setData(ClipboardData(text: code));
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text('Friend code $code copied!'),
-                                  behavior: SnackBarBehavior.floating,
-                                  duration: const Duration(seconds: 2),
-                                ),
-                              );
-                            }
-                          },
-                          borderRadius: BorderRadius.circular(4),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 4),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(
-                                  code,
-                                  style: TextStyle(
-                                    color: Colors.grey[600],
-                                    fontWeight: FontWeight.w600,
-                                    letterSpacing: 1.1,
+                      Builder(
+                        builder: (context) {
+                          final code =
+                              SessionManager().getCurrentUser()?.friendCode ??
+                              '---';
+                          return InkWell(
+                            onTap: () {
+                              if (code != '---') {
+                                Clipboard.setData(ClipboardData(text: code));
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('Friend code $code copied!'),
+                                    behavior: SnackBarBehavior.floating,
+                                    duration: const Duration(seconds: 2),
                                   ),
-                                ),
-                                const SizedBox(width: 6),
-                                Icon(Icons.copy, size: 14, color: Colors.grey[400]),
-                              ],
+                                );
+                              }
+                            },
+                            borderRadius: BorderRadius.circular(4),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                vertical: 2,
+                                horizontal: 4,
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    code,
+                                    style: TextStyle(
+                                      color: Colors.grey[600],
+                                      fontWeight: FontWeight.w600,
+                                      letterSpacing: 1.1,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Icon(
+                                    Icons.copy,
+                                    size: 14,
+                                    color: Colors.grey[400],
+                                  ),
+                                ],
+                              ),
                             ),
-                          ),
-                        );
-                      }),
+                          );
+                        },
+                      ),
                     ],
                   ),
                 ],
@@ -175,11 +210,14 @@ class _ProfilePageState extends State<ProfilePage> {
                 // Combina nacionalidades e países visitados para o cálculo total
                 final Set<String> allVisited = {
                   ...(user?.nationalities ?? []),
-                  ...(user?.visitedCountries ?? []),
+                  ...(user?.visitedCountries.keys ?? []),
                 };
-                
+
                 final int totalVisitedCount = allVisited.length;
-                final double percentValue = (totalVisitedCount / 250).clamp(0.0, 1.0);
+                final double percentValue = (totalVisitedCount / 250).clamp(
+                  0.0,
+                  1.0,
+                );
 
                 return Column(
                   children: [
@@ -187,21 +225,36 @@ class _ProfilePageState extends State<ProfilePage> {
                     Card(
                       elevation: 2,
                       clipBehavior: Clip.antiAlias,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                       child: ExpansionTile(
-                        title: const Text('Countries Visited', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                        title: const Text(
+                          'Countries Visited',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 18,
+                          ),
+                        ),
                         subtitle: Text('$totalVisitedCount / 250'),
                         children: [
                           if (allVisited.isEmpty)
-                            const ListTile(title: Text('No countries visited yet.'))
+                            const ListTile(
+                              title: Text('No countries visited yet.'),
+                            )
                           else
                             Column(
                               children: allVisited.map((code) {
                                 String displayCode = code.toUpperCase();
-                                if (displayCode == 'KO' || displayCode == 'KOS') displayCode = 'XK';
+                                if (displayCode == 'KO' || displayCode == 'KOS')
+                                  displayCode = 'XK';
 
                                 return ListTile(
-                                  leading: buildFlag(displayCode, width: 32, height: 22),
+                                  leading: buildFlag(
+                                    displayCode,
+                                    width: 32,
+                                    height: 22,
+                                  ),
                                   title: Text(getCountryName(displayCode)),
                                   subtitle: Text(displayCode),
                                 );
@@ -214,12 +267,20 @@ class _ProfilePageState extends State<ProfilePage> {
                     // --- CARD DE PERCENTAGEM DE EXPLORAÇÃO DO MUNDO ---
                     Card(
                       elevation: 2,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                       child: Padding(
                         padding: const EdgeInsets.all(16),
                         child: Column(
                           children: [
-                            const Text('World Exploration', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                            const Text(
+                              'World Exploration',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 18,
+                              ),
+                            ),
                             const SizedBox(height: 12),
                             LinearProgressIndicator(
                               value: percentValue,
@@ -229,7 +290,9 @@ class _ProfilePageState extends State<ProfilePage> {
                             const SizedBox(height: 8),
                             Text(
                               '${(percentValue * 100).toStringAsFixed(1)}%',
-                              style: const TextStyle(fontWeight: FontWeight.w600),
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                           ],
                         ),
@@ -252,9 +315,17 @@ class _ProfilePageState extends State<ProfilePage> {
                 return Card(
                   elevation: 2,
                   clipBehavior: Clip.antiAlias,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                   child: ExpansionTile(
-                    title: const Text('Future Trips', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                    title: const Text(
+                      'Future Trips',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 18,
+                      ),
+                    ),
                     subtitle: Text('$count countries planned'),
                     children: [
                       if (codes.isEmpty)
@@ -263,10 +334,15 @@ class _ProfilePageState extends State<ProfilePage> {
                         Column(
                           children: codes.map((code) {
                             String displayCode = code.toUpperCase();
-                            if (displayCode == 'KO' || displayCode == 'KOS') displayCode = 'XK';
+                            if (displayCode == 'KO' || displayCode == 'KOS')
+                              displayCode = 'XK';
 
                             return ListTile(
-                              leading: buildFlag(displayCode, width: 32, height: 22),
+                              leading: buildFlag(
+                                displayCode,
+                                width: 32,
+                                height: 22,
+                              ),
                               title: Text(getCountryName(displayCode)),
                               subtitle: Text(displayCode),
                             );

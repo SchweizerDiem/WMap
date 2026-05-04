@@ -49,7 +49,10 @@ class _PhotoViewPageState extends State<PhotoViewPage> {
         title: const Text('Delete Photo'),
         content: const Text('Are you sure you want to delete this photo?'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
             child: const Text('Delete', style: TextStyle(color: Colors.red)),
@@ -60,14 +63,12 @@ class _PhotoViewPageState extends State<PhotoViewPage> {
 
     if (confirm == true) {
       final photoToDelete = _localPhotos[_currentIndex];
-      
+
       try {
         // Remove a foto fisicamente através do gestor de fotos
-        await widget.photoManager.removePhotos(
-          widget.countryCode,
-          [photoToDelete],
-          folderName: widget.folderName,
-        );
+        await widget.photoManager.removePhotos(widget.countryCode, [
+          photoToDelete,
+        ], folderName: widget.folderName);
 
         setState(() {
           _localPhotos.removeAt(_currentIndex);
@@ -81,14 +82,14 @@ class _PhotoViewPageState extends State<PhotoViewPage> {
             }
           }
         });
-        
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Photo deleted')),
-        );
+
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Photo deleted')));
       } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error deleting: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error deleting: $e')));
       }
     }
   }
@@ -100,8 +101,10 @@ class _PhotoViewPageState extends State<PhotoViewPage> {
       appBar: AppBar(
         backgroundColor: Colors.black,
         iconTheme: const IconThemeData(color: Colors.white),
-        title: Text('${_currentIndex + 1} / ${_localPhotos.length}', 
-                   style: const TextStyle(color: Colors.white)),
+        title: Text(
+          '${_currentIndex + 1} / ${_localPhotos.length}',
+          style: const TextStyle(color: Colors.white),
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
@@ -159,9 +162,9 @@ class _GalleryPageState extends State<GalleryPage> {
     final user = SessionManager().getCurrentUser();
     final Set<String> allToLoad = {
       ...(user?.nationalities ?? []),
-      ...(user?.visitedCountries ?? []),
+      ...(user?.visitedCountries.keys ?? []),
     };
-    
+
     for (var code in allToLoad) {
       await _photoManager.loadCountryData(code);
     }
@@ -171,17 +174,23 @@ class _GalleryPageState extends State<GalleryPage> {
   // Filtra a lista de países com base no que o utilizador escreve na barra de pesquisa
   List<String> _getFilteredCountries() {
     final user = SessionManager().getCurrentUser();
-    
+
     final Set<String> combined = {
       ...(user?.nationalities ?? []),
-      ...(user?.visitedCountries ?? []),
+      ...(user?.visitedCountries.keys ?? []),
     };
 
     final List<String> sorted = combined.toList()
       ..sort((a, b) => getCountryName(a).compareTo(getCountryName(b)));
 
     if (_searchQuery.isEmpty) return sorted;
-    return sorted.where((code) => getCountryName(code).toLowerCase().contains(_searchQuery.toLowerCase())).toList();
+    return sorted
+        .where(
+          (code) => getCountryName(
+            code,
+          ).toLowerCase().contains(_searchQuery.toLowerCase()),
+        )
+        .toList();
   }
 
   // Lógica para adicionar fotos: pergunta se quer criar uma pasta e depois abre a galeria do telemóvel
@@ -191,10 +200,18 @@ class _GalleryPageState extends State<GalleryPage> {
         context: context,
         builder: (context) => AlertDialog(
           title: const Text('Create folder?'),
-          content: const Text('Do you wish to create a folder for these photos?'),
+          content: const Text(
+            'Do you wish to create a folder for these photos?',
+          ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('No')),
-            ElevatedButton(onPressed: () => Navigator.pop(context, true), child: const Text('Yes')),
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('No'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Yes'),
+            ),
           ],
         ),
       );
@@ -208,10 +225,19 @@ class _GalleryPageState extends State<GalleryPage> {
           context: context,
           builder: (context) => AlertDialog(
             title: const Text('Folder name'),
-            content: TextField(controller: controller, decoration: const InputDecoration(hintText: 'Enter name')),
+            content: TextField(
+              controller: controller,
+              decoration: const InputDecoration(hintText: 'Enter name'),
+            ),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-              ElevatedButton(onPressed: () => Navigator.pop(context, controller.text.trim()), child: const Text('Create')),
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context, controller.text.trim()),
+                child: const Text('Create'),
+              ),
             ],
           ),
         );
@@ -222,11 +248,21 @@ class _GalleryPageState extends State<GalleryPage> {
       final List<XFile>? picked = await _imagePicker.pickMultiImage();
       if (picked != null && picked.isNotEmpty) {
         final files = picked.map((x) => File(x.path)).toList();
-        await _photoManager.addPhotos(countryCode, files, folderName: folderName);
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Added ${files.length} photo(s)')));
+        await _photoManager.addPhotos(
+          countryCode,
+          files,
+          folderName: folderName,
+        );
+        if (mounted)
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Added ${files.length} photo(s)')),
+          );
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+      if (mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error: $e')));
     }
   }
 
@@ -239,10 +275,21 @@ class _GalleryPageState extends State<GalleryPage> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Delete Photos'),
-        content: Text('Are you sure you want to delete ${selectedKeys.length} photo(s)?'),
+        content: Text(
+          'Are you sure you want to delete ${selectedKeys.length} photo(s)?',
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Delete', style: const TextStyle(color: Colors.red))),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text(
+              'Delete',
+              style: const TextStyle(color: Colors.red),
+            ),
+          ),
         ],
       ),
     );
@@ -254,30 +301,40 @@ class _GalleryPageState extends State<GalleryPage> {
       final parts = key.split('::');
       final folder = parts[0];
       final idx = int.parse(parts[1]);
-      final photos = folder.isEmpty 
-          ? _photoManager.getPhotos(countryCode) 
+      final photos = folder.isEmpty
+          ? _photoManager.getPhotos(countryCode)
           : _photoManager.getPhotosInFolder(countryCode, folder);
-      if (idx < photos.length) byFolder.putIfAbsent(folder, () => []).add(photos[idx]);
+      if (idx < photos.length)
+        byFolder.putIfAbsent(folder, () => []).add(photos[idx]);
     }
 
     try {
       for (final entry in byFolder.entries) {
-        await _photoManager.removePhotos(countryCode, entry.value, folderName: entry.key.isEmpty ? null : entry.key);
+        await _photoManager.removePhotos(
+          countryCode,
+          entry.value,
+          folderName: entry.key.isEmpty ? null : entry.key,
+        );
       }
       setState(() {
         _selectedIndices[countryCode]?.clear();
         _selectionMode[countryCode] = false;
       });
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Delete error: $e')));
+      if (mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Delete error: $e')));
     }
   }
 
   // Ativa ou desativa a interface de seleção (checkboxes sobre as fotos)
   void _toggleSelectionMode(String countryCode, bool? value) {
     setState(() {
-      _selectionMode[countryCode] = value ?? !( _selectionMode[countryCode] ?? false);
-      if (!(_selectionMode[countryCode] ?? false)) _selectedIndices[countryCode]?.clear();
+      _selectionMode[countryCode] =
+          value ?? !(_selectionMode[countryCode] ?? false);
+      if (!(_selectionMode[countryCode] ?? false))
+        _selectedIndices[countryCode]?.clear();
     });
   }
 
@@ -286,7 +343,10 @@ class _GalleryPageState extends State<GalleryPage> {
     final set = _selectedIndices.putIfAbsent(countryCode, () => <String>{});
     final key = '$folderName::$index';
     setState(() {
-      if (set.contains(key)) set.remove(key); else set.add(key);
+      if (set.contains(key))
+        set.remove(key);
+      else
+        set.add(key);
     });
   }
 
@@ -297,7 +357,10 @@ class _GalleryPageState extends State<GalleryPage> {
       appBar: AppBar(
         title: const Text('Gallery'),
         leading: widget.onBackPressed != null
-            ? IconButton(icon: const Icon(Icons.arrow_back), onPressed: widget.onBackPressed)
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back),
+                onPressed: widget.onBackPressed,
+              )
             : null,
       ),
       body: Column(
@@ -311,10 +374,18 @@ class _GalleryPageState extends State<GalleryPage> {
               decoration: InputDecoration(
                 hintText: 'Search country...',
                 prefixIcon: const Icon(Icons.search),
-                suffixIcon: _searchQuery.isNotEmpty 
-                    ? IconButton(icon: const Icon(Icons.clear), onPressed: () { _searchController.clear(); setState(() => _searchQuery = ""); }) 
+                suffixIcon: _searchQuery.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.clear),
+                        onPressed: () {
+                          _searchController.clear();
+                          setState(() => _searchQuery = "");
+                        },
+                      )
                     : null,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(30)),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(30),
+                ),
               ),
             ),
           ),
@@ -349,7 +420,15 @@ class _GalleryPageState extends State<GalleryPage> {
               children: [
                 buildFlag(displayCode, width: 48, height: 32),
                 const SizedBox(width: 12),
-                Expanded(child: Text(name, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold))),
+                Expanded(
+                  child: Text(
+                    name,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
                 _buildActionButtons(displayCode),
               ],
             ),
@@ -366,30 +445,50 @@ class _GalleryPageState extends State<GalleryPage> {
     if (_selectionMode[code] ?? false) {
       return Row(
         children: [
-          IconButton(onPressed: () => _deleteSelected(code), icon: const Icon(Icons.delete, color: Colors.red)),
-          IconButton(onPressed: () => _toggleSelectionMode(code, false), icon: const Icon(Icons.close)),
+          IconButton(
+            onPressed: () => _deleteSelected(code),
+            icon: const Icon(Icons.delete, color: Colors.red),
+          ),
+          IconButton(
+            onPressed: () => _toggleSelectionMode(code, false),
+            icon: const Icon(Icons.close),
+          ),
         ],
       );
     }
     return Row(
       children: [
-        IconButton(onPressed: () => _uploadForCountry(code), icon: const Icon(Icons.add_a_photo, color: Color(0xff6c63ff))),
-        IconButton(onPressed: () => _showNoteDialog(code), icon: const Icon(Icons.edit_note)),
+        IconButton(
+          onPressed: () => _uploadForCountry(code),
+          icon: const Icon(Icons.add_a_photo, color: Color(0xff6c63ff)),
+        ),
+        IconButton(
+          onPressed: () => _showNoteDialog(code),
+          icon: const Icon(Icons.edit_note),
+        ),
       ],
     );
   }
 
   // Abre diálogo para escrever uma nota/recordação sobre o país
   Future<void> _showNoteDialog(String code) async {
-    final controller = TextEditingController(text: _photoManager.getNote(code) ?? '');
+    final controller = TextEditingController(
+      text: _photoManager.getNote(code) ?? '',
+    );
     final result = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Country Note'),
         content: TextField(controller: controller, maxLines: 3),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-          ElevatedButton(onPressed: () => Navigator.pop(context, controller.text), child: const Text('Save')),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, controller.text),
+            child: const Text('Save'),
+          ),
         ],
       ),
     );
@@ -405,7 +504,10 @@ class _GalleryPageState extends State<GalleryPage> {
         return Container(
           width: double.infinity,
           padding: const EdgeInsets.symmetric(vertical: 8),
-          child: Text(note, style: const TextStyle(fontStyle: FontStyle.italic)),
+          child: Text(
+            note,
+            style: const TextStyle(fontStyle: FontStyle.italic),
+          ),
         );
       },
     );
@@ -459,14 +561,21 @@ class _GalleryPageState extends State<GalleryPage> {
   Widget _buildPhotoGrid(String code, String folder, List<File> photos) {
     final isSelecting = _selectionMode[code] ?? false;
     return GridView.builder(
-      shrinkWrap: true, // Importante para funcionar dentro de listas/ExpansionTiles
+      shrinkWrap:
+          true, // Importante para funcionar dentro de listas/ExpansionTiles
       physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 3, crossAxisSpacing: 4, mainAxisSpacing: 4),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 3,
+        crossAxisSpacing: 4,
+        mainAxisSpacing: 4,
+      ),
       itemCount: photos.length,
       itemBuilder: (context, i) {
-        final isSelected = _selectedIndices[code]?.contains('$folder::$i') ?? false;
+        final isSelected =
+            _selectedIndices[code]?.contains('$folder::$i') ?? false;
         return GestureDetector(
-          onLongPress: () => _toggleSelectionMode(code, true), // Inicia modo seleção
+          onLongPress: () =>
+              _toggleSelectionMode(code, true), // Inicia modo seleção
           onTap: () {
             if (isSelecting) {
               _toggleSelectIndex(code, folder, i);
@@ -476,11 +585,11 @@ class _GalleryPageState extends State<GalleryPage> {
                 context,
                 MaterialPageRoute(
                   builder: (_) => PhotoViewPage(
-                    photos: photos, 
-                    initialIndex: i, 
-                    countryCode: code, 
-                    folderName: folder.isEmpty ? null : folder, 
-                    photoManager: _photoManager
+                    photos: photos,
+                    initialIndex: i,
+                    countryCode: code,
+                    folderName: folder.isEmpty ? null : folder,
+                    photoManager: _photoManager,
                   ),
                 ),
               );
@@ -493,8 +602,13 @@ class _GalleryPageState extends State<GalleryPage> {
               // Sobreposição visual (overlay) se a foto estiver selecionada
               if (isSelecting)
                 Container(
-                  color: isSelected ? Colors.blue.withOpacity(0.3) : Colors.transparent,
-                  child: Icon(isSelected ? Icons.check_circle : Icons.circle_outlined, color: Colors.white),
+                  color: isSelected
+                      ? Colors.blue.withOpacity(0.3)
+                      : Colors.transparent,
+                  child: Icon(
+                    isSelected ? Icons.check_circle : Icons.circle_outlined,
+                    color: Colors.white,
+                  ),
                 ),
             ],
           ),

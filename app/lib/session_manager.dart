@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter/material.dart'; 
+import 'package:flutter/material.dart';
 import 'package:home_widget/home_widget.dart';
 import 'dart:math';
 
@@ -9,14 +9,15 @@ import 'dart:math';
 class UserAccount {
   final String name;
   final String email;
-  final String friendCode; // Código único para amizades
-  final Set<String> visitedCountries; // Conjunto de códigos ISO de países visitados
-  final Set<String> plannedCountries; // Países que o utilizador planeia visitar
-  final List<String> friends; // IDs dos amigos
-  final List<String> nationalities; // Países de origem do utilizador
-  final Color colorVisited; // Cor personalizada para países visitados no mapa
-  final Color colorPlanned; // Cor personalizada para países planeados
-  final Color colorNationality; // Cor para o país de nacionalidade
+  final String friendCode;
+  // Alterado de Set<String> para Map para guardar detalhes
+  final Map<String, dynamic> visitedCountries;
+  final Set<String> plannedCountries;
+  final List<String> friends;
+  final List<String> nationalities;
+  final Color colorVisited;
+  final Color colorPlanned;
+  final Color colorNationality;
 
   UserAccount({
     required this.name,
@@ -29,7 +30,7 @@ class UserAccount {
     this.colorVisited = const Color(0xFF1F83D4),
     this.colorPlanned = const Color(0xFF061094),
     this.colorNationality = const Color(0xFF09B5E9),
-  });   
+  });
 }
 
 class SessionManager {
@@ -41,17 +42,26 @@ class SessionManager {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _db = FirebaseFirestore.instance;
 
-  UserAccount? _currentUser; // Armazena os dados do utilizador logado em memória
+  UserAccount?
+  _currentUser; // Armazena os dados do utilizador logado em memória
+
+  UserAccount? get currentUser => _currentUser;
 
   // --- NOTIFIERS ---
   // ValueNotifiers permitem que a UI se atualize automaticamente quando os valores mudam
   final ValueNotifier<int> visitedCountNotifier = ValueNotifier<int>(0);
   final ValueNotifier<int> plannedCountNotifier = ValueNotifier<int>(0);
   final ValueNotifier<String> userNameNotifier = ValueNotifier<String>('Guest');
-  
-  final ValueNotifier<Color> visitedColorNotifier = ValueNotifier<Color>(const Color(0xFF1F83D4));
-  final ValueNotifier<Color> plannedColorNotifier = ValueNotifier<Color>(const Color(0xFF061094));
-  final ValueNotifier<Color> nationalityColorNotifier = ValueNotifier<Color>(const Color(0xFF09B5E9));
+
+  final ValueNotifier<Color> visitedColorNotifier = ValueNotifier<Color>(
+    const Color(0xFF1F83D4),
+  );
+  final ValueNotifier<Color> plannedColorNotifier = ValueNotifier<Color>(
+    const Color(0xFF061094),
+  );
+  final ValueNotifier<Color> nationalityColorNotifier = ValueNotifier<Color>(
+    const Color(0xFF09B5E9),
+  );
 
   UserAccount? getCurrentUser() => _currentUser;
 
@@ -82,7 +92,11 @@ class SessionManager {
   // --- AUTH (AUTENTICAÇÃO) ---
 
   // Regista um novo utilizador no Firebase Auth e cria o seu perfil inicial no Firestore
-  Future<bool> registerAccount(String name, String email, String password) async {
+  Future<bool> registerAccount(
+    String name,
+    String email,
+    String password,
+  ) async {
     try {
       UserCredential res = await _auth.createUserWithEmailAndPassword(
         email: email,
@@ -115,7 +129,7 @@ class SessionManager {
   Future<bool> login(String email, String password) async {
     try {
       await _auth.signInWithEmailAndPassword(email: email, password: password);
-      await refreshUserData(); 
+      await refreshUserData();
       return true;
     } catch (e) {
       debugPrint("Login error: $e");
@@ -129,20 +143,43 @@ class SessionManager {
     if (user == null) return;
 
     DocumentSnapshot doc = await _db.collection('users').doc(user.uid).get();
-    
+
     if (doc.exists) {
       final data = doc.data() as Map<String, dynamic>;
-      
-      // Converte as cores vindas do banco de dados
-      final Color vColor = data['colorVisited'] != null ? _hexToColor(data['colorVisited']) : const Color(0xFF1F83D4);
-      final Color pColor = data['colorPlanned'] != null ? _hexToColor(data['colorPlanned']) : const Color(0xFF061094);
-      final Color nColor = data['colorNationality'] != null ? _hexToColor(data['colorNationality']) : const Color(0xFF09B5E9);
 
+      // 1. Converte as cores
+      final Color vColor = data['colorVisited'] != null
+          ? _hexToColor(data['colorVisited'])
+          : const Color(0xFF1F83D4);
+      final Color pColor = data['colorPlanned'] != null
+          ? _hexToColor(data['colorPlanned'])
+          : const Color(0xFF061094);
+      final Color nColor = data['colorNationality'] != null
+          ? _hexToColor(data['colorNationality'])
+          : const Color(0xFF09B5E9);
+
+      // 2. Lógica de segurança para o Mapa de Países (O teu código estava bom aqui)
+      Map<String, dynamic> visitedMap = {};
+      if (data['visitedCountries'] is Map) {
+        visitedMap = Map<String, dynamic>.from(data['visitedCountries']);
+      } else if (data['visitedCountries'] is List) {
+        for (var code in data['visitedCountries']) {
+          visitedMap[code.toString().toUpperCase()] = {
+            'year': DateTime.now().year,
+            'transport': 'plane',
+          };
+        }
+      }
+
+      // 3. ATRIBUIÇÃO AO UTILIZADOR (Aqui estava o erro)
       _currentUser = UserAccount(
         name: data['name'] ?? 'User',
         email: data['email'] ?? '',
         friendCode: data['friendCode'] ?? 'N/A',
-        visitedCountries: Set<String>.from(data['visitedCountries'] ?? []),
+
+        // MUITO IMPORTANTE: Usa a variável 'visitedMap' que acabámos de processar!
+        visitedCountries: visitedMap,
+
         plannedCountries: Set<String>.from(data['plannedCountries'] ?? []),
         friends: List<String>.from(data['friends'] ?? []),
         nationalities: List<String>.from(data['nationalities'] ?? []),
@@ -151,11 +188,11 @@ class SessionManager {
         colorNationality: nColor,
       );
 
-      // Atualiza os Notifiers para disparar rebuilds nos widgets que os escutam
-      visitedCountNotifier.value = _currentUser!.visitedCountries.length;
+      // 4. Atualiza os Notifiers
+      visitedCountNotifier.value = visitedMap.length; // Usa o length do mapa
       plannedCountNotifier.value = _currentUser!.plannedCountries.length;
       userNameNotifier.value = _currentUser!.name;
-      
+
       visitedColorNotifier.value = vColor;
       plannedColorNotifier.value = pColor;
       nationalityColorNotifier.value = nColor;
@@ -165,7 +202,11 @@ class SessionManager {
   // --- ATUALIZAÇÃO DE CORES ---
 
   // Muda as cores do mapa no DB e sincroniza com o HomeWidget (Android)
-  Future<void> updateMapColors({Color? visited, Color? planned, Color? nationality}) async {
+  Future<void> updateMapColors({
+    Color? visited,
+    Color? planned,
+    Color? nationality,
+  }) async {
     final uid = _auth.currentUser?.uid;
     if (uid == null) return;
 
@@ -195,7 +236,10 @@ class SessionManager {
     try {
       await _db.collection('users').doc(uid).update(updates);
       // Notifica o Android para atualizar o desenho do widget no homescreen
-      await HomeWidget.updateWidget(name: 'MapWidgetProvider', androidName: 'MapWidgetProvider');
+      await HomeWidget.updateWidget(
+        name: 'MapWidgetProvider',
+        androidName: 'MapWidgetProvider',
+      );
     } catch (e) {
       debugPrint("Erro ao atualizar cores no Firebase: $e");
     }
@@ -207,38 +251,53 @@ class SessionManager {
   Future<String> sendFriendRequest(String code) async {
     try {
       final currentUserId = _auth.currentUser?.uid;
-      if (currentUserId == null || _currentUser == null) return "Erro de sessão";
+      if (currentUserId == null || _currentUser == null)
+        return "Erro de sessão";
       final cleanCode = code.toUpperCase().trim();
-      
+
       // Procura o utilizador pelo código
-      final query = await _db.collection('users').where('friendCode', isEqualTo: cleanCode).get();
+      final query = await _db
+          .collection('users')
+          .where('friendCode', isEqualTo: cleanCode)
+          .get();
       if (query.docs.isEmpty) return "User not found.";
-      
+
       final targetId = query.docs.first.id;
       if (targetId == currentUserId) return "You can't add yourself.";
       if (_currentUser!.friends.contains(targetId)) return "Already friends.";
 
       // Regista o pedido na coleção friend_requests
-      await _db.collection('friend_requests').doc("${currentUserId}_$targetId").set({
-        'from': currentUserId,
-        'to': targetId,
-        'senderName': _currentUser!.name,
-        'status': 'pending',
-        'timestamp': FieldValue.serverTimestamp(),
-      });
+      await _db
+          .collection('friend_requests')
+          .doc("${currentUserId}_$targetId")
+          .set({
+            'from': currentUserId,
+            'to': targetId,
+            'senderName': _currentUser!.name,
+            'status': 'pending',
+            'timestamp': FieldValue.serverTimestamp(),
+          });
       return "Request sent!";
-    } catch (e) { return "Error: $e"; }
+    } catch (e) {
+      return "Error: $e";
+    }
   }
 
   // Aceita o pedido e adiciona o ID à lista de amigos de ambos os utilizadores
   Future<void> acceptFriendRequest(String requestId, String fromUserId) async {
     try {
       final currentUserId = _auth.currentUser!.uid;
-      await _db.collection('users').doc(currentUserId).update({'friends': FieldValue.arrayUnion([fromUserId])});
-      await _db.collection('users').doc(fromUserId).update({'friends': FieldValue.arrayUnion([currentUserId])});
+      await _db.collection('users').doc(currentUserId).update({
+        'friends': FieldValue.arrayUnion([fromUserId]),
+      });
+      await _db.collection('users').doc(fromUserId).update({
+        'friends': FieldValue.arrayUnion([currentUserId]),
+      });
       await _db.collection('friend_requests').doc(requestId).delete();
       await refreshUserData();
-    } catch (e) { debugPrint("Error accepting friend: $e"); }
+    } catch (e) {
+      debugPrint("Error accepting friend: $e");
+    }
   }
 
   // Elimina o documento do pedido de amizade
@@ -249,13 +308,26 @@ class SessionManager {
   // Stream para ouvir novos pedidos de amizade em tempo real
   Stream<QuerySnapshot> getIncomingRequestsStream() {
     final currentUserId = _auth.currentUser?.uid;
-    return _db.collection('friend_requests').where('to', isEqualTo: currentUserId).where('status', isEqualTo: 'pending').snapshots();
+    return _db
+        .collection('friend_requests')
+        .where('to', isEqualTo: currentUserId)
+        .where('status', isEqualTo: 'pending')
+        .snapshots();
   }
 
   // Stream para obter os dados (nome, foto, etc) da lista de amigos
   Stream<List<Map<String, dynamic>>> getFriendsListStream() {
-    if (_currentUser == null || _currentUser!.friends.isEmpty) return Stream.value([]);
-    return _db.collection('users').where(FieldPath.documentId, whereIn: _currentUser!.friends).snapshots().map((snapshot) => snapshot.docs.map((doc) => {'id': doc.id, ...doc.data()}).toList());
+    if (_currentUser == null || _currentUser!.friends.isEmpty)
+      return Stream.value([]);
+    return _db
+        .collection('users')
+        .where(FieldPath.documentId, whereIn: _currentUser!.friends)
+        .snapshots()
+        .map(
+          (snapshot) => snapshot.docs
+              .map((doc) => {'id': doc.id, ...doc.data()})
+              .toList(),
+        );
   }
 
   // --- GESTÃO DE CONTA ---
@@ -274,20 +346,83 @@ class SessionManager {
       if (uid == null) return;
       await _db.collection('users').doc(uid).update({'name': newName});
       await refreshUserData();
-    } catch (e) { rethrow; }
+    } catch (e) {
+      rethrow;
+    }
   }
 
   // --- LÓGICA DO MAPA ---
 
-  // Marca um país como visitado (e remove-o da lista de planeados se lá estiver)
-  Future<void> toggleVisitedForCurrentUser(String countryCode) async {
+  Future<void> addTripToCountry(
+    String countryCode, {
+    required int year,
+    required String? transport,
+    DateTime? startDate,
+    DateTime? endDate,
+  }) async {
     if (_currentUser == null) return;
     final String code = countryCode.toUpperCase();
     final userDoc = _db.collection('users').doc(_auth.currentUser!.uid);
-    if (_currentUser!.visitedCountries.contains(code)) {
-      await userDoc.update({'visitedCountries': FieldValue.arrayRemove([code])});
+
+    // Criamos o objeto da nova viagem
+    final newTrip = {
+      'year': year,
+      'transport': transport ?? 'plane',
+      'startDate': startDate?.toIso8601String(),
+      'endDate': endDate?.toIso8601String(),
+      'addedAt': DateTime.now().toIso8601String(),
+    };
+
+    // Se o país ainda não existe no mapa, criamos a entrada com a primeira viagem
+    if (!_currentUser!.visitedCountries.containsKey(code)) {
+      await userDoc.update({
+        'visitedCountries.$code': {
+          'trips': [newTrip],
+        },
+        'plannedCountries': FieldValue.arrayRemove([
+          code,
+        ]), // Remove dos planeados
+      });
     } else {
-      await userDoc.update({'visitedCountries': FieldValue.arrayUnion([code]), 'plannedCountries': FieldValue.arrayRemove([code])});
+      // Se já existe, usamos o arrayUnion do Firebase para adicionar à lista 'trips'
+      await userDoc.update({
+        'visitedCountries.$code.trips': FieldValue.arrayUnion([newTrip]),
+        'plannedCountries': FieldValue.arrayRemove([code]),
+      });
+    }
+
+    await refreshUserData();
+  }
+
+  // Marca um país como visitado (e remove-o da lista de planeados se lá estiver)
+  Future<void> toggleVisitedForCurrentUser(
+    String countryCode, {
+    int? year,
+    String? transport,
+    DateTime? startDate,
+    DateTime? endDate,
+  }) async {
+    if (_currentUser == null) return;
+    final String code = countryCode.toUpperCase();
+    final userDoc = _db.collection('users').doc(_auth.currentUser!.uid);
+
+    if (_currentUser!.visitedCountries.containsKey(code)) {
+      // Se já existe, remove (comportamento de toggle)
+      await userDoc.update({'visitedCountries.$code': FieldValue.delete()});
+    } else {
+      // Se não existe, cria o objeto com os detalhes
+      final tripDetails = {
+        'year': year ?? DateTime.now().year,
+        'transport': transport ?? 'plane',
+        'startDate': startDate?.toIso8601String(),
+        'endDate': endDate?.toIso8601String(),
+        'addedAt': FieldValue.serverTimestamp(),
+      };
+
+      await userDoc.update({
+        'visitedCountries.$code': tripDetails,
+        'plannedCountries': FieldValue.arrayRemove([code]),
+      });
     }
     await refreshUserData();
   }
@@ -296,28 +431,38 @@ class SessionManager {
   Future<void> togglePlannedForCurrentUser(String countryCode) async {
     if (_currentUser == null) return;
     final String code = countryCode.toUpperCase();
-    if (_currentUser!.visitedCountries.contains(code)) return;
+    if (_currentUser!.visitedCountries.containsKey(code)) return;
     final userDoc = _db.collection('users').doc(_auth.currentUser!.uid);
     if (_currentUser!.plannedCountries.contains(code)) {
-      await userDoc.update({'plannedCountries': FieldValue.arrayRemove([code])});
+      await userDoc.update({
+        'plannedCountries': FieldValue.arrayRemove([code]),
+      });
     } else {
-      await userDoc.update({'plannedCountries': FieldValue.arrayUnion([code])});
+      await userDoc.update({
+        'plannedCountries': FieldValue.arrayUnion([code]),
+      });
     }
     await refreshUserData();
   }
 
   // Métodos auxiliares de consulta de estado
-  bool isCountryVisitedForCurrentUser(String code) => _currentUser?.visitedCountries.contains(code.toUpperCase()) ?? false;
-  bool isCountryPlannedForCurrentUser(String code) => _currentUser?.plannedCountries.contains(code.toUpperCase()) ?? false;
-  List<String> getVisitedCountriesForCurrentUser() => _currentUser?.visitedCountries.toList() ?? [];
+  bool isCountryVisitedForCurrentUser(String code) =>
+      _currentUser?.visitedCountries.containsKey(code.toUpperCase()) ?? false;
+  bool isCountryPlannedForCurrentUser(String code) =>
+      _currentUser?.plannedCountries.contains(code.toUpperCase()) ?? false;
+  List<String> getVisitedCountriesForCurrentUser() =>
+      _currentUser?.visitedCountries.keys.toList() ?? [];
   List<String> getFriendsForCurrentUser() => _currentUser?.friends ?? [];
+  Map<String, dynamic>? getTripDetails(String countryCode) {
+    return _currentUser?.visitedCountries[countryCode.toUpperCase()];
+  }
 
   // Atualiza as nacionalidades do utilizador
   Future<void> updateNationalities(List<String> codes) async {
     final uid = _auth.currentUser?.uid;
     if (uid == null) return;
     await _db.collection('users').doc(uid).update({'nationalities': codes});
-    await refreshUserData(); 
+    await refreshUserData();
   }
 
   // Repõe as cores originais da aplicação
@@ -337,8 +482,27 @@ class SessionManager {
   Future<void> removeFriend(String friendId) async {
     if (_currentUser == null) return;
     final currentUserId = _auth.currentUser!.uid;
-    await _db.collection('users').doc(currentUserId).update({'friends': FieldValue.arrayRemove([friendId])});
-    await _db.collection('users').doc(friendId).update({'friends': FieldValue.arrayRemove([currentUserId])});
-    await refreshUserData(); 
+    await _db.collection('users').doc(currentUserId).update({
+      'friends': FieldValue.arrayRemove([friendId]),
+    });
+    await _db.collection('users').doc(friendId).update({
+      'friends': FieldValue.arrayRemove([currentUserId]),
+    });
+    await refreshUserData();
+  }
+
+  Future<void> removeTripFromCountry(
+    String countryCode,
+    Map<String, dynamic> trip,
+  ) async {
+    if (_currentUser == null) return;
+    final userDoc = _db.collection('users').doc(_auth.currentUser!.uid);
+    final String code = countryCode.toUpperCase();
+
+    await userDoc.update({
+      'visitedCountries.$code.trips': FieldValue.arrayRemove([trip]),
+    });
+
+    await refreshUserData();
   }
 }
