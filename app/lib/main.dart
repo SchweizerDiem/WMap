@@ -31,7 +31,7 @@ import './pages/gallery.dart';
 import 'session_manager.dart';
 import 'country_names.dart';
 import './pages/trip_details_form.dart';
-
+import 'country_photo_manager.dart';
 // --- FUNÇÕES UTILITÁRIAS GLOBAIS ---
 
 // Padroniza os códigos de país para letras minúsculas (ex: 'PT')
@@ -386,14 +386,13 @@ class _HomePageState extends State<HomePage> {
       }
     }
 
+    bool showTripForm = false;
+    Map<String, dynamic>? tripToEdit;
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) {
-        bool showTripForm = false;
-        Map<String, dynamic>? tripToEdit;
-
         return StatefulBuilder(
           builder: (BuildContext context, StateSetter setModalState) {
             final user = SessionManager().currentUser;
@@ -432,6 +431,7 @@ class _HomePageState extends State<HomePage> {
                 bottom: MediaQuery.of(context).viewInsets.bottom + 20,
               ),
               child: SingleChildScrollView(
+                physics: const BouncingScrollPhysics(),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -499,149 +499,233 @@ class _HomePageState extends State<HomePage> {
                     const SizedBox(height: 15),
 
                     // HISTÓRICO DE VIAGENS
-                    if (trips.isNotEmpty && !showTripForm) ...[
-                      const Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          "Your Journeys",
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
+                    // --- INÍCIO DO BLOCO DE HISTÓRICO E BOTÕES ---
+
+                    // 1. Bloco do Histórico (Só aparece se o formulário estiver fechado)
+                    if (!showTripForm) ...[
+                      if (trips.isNotEmpty) ...[
+                        const Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            "Your Journeys",
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ),
-                      ),
-                      const SizedBox(height: 10),
-                      ...trips.map((trip) {
-                        // Formatação do intervalo de datas
-                        String dateDisplay = "";
-                        if (trip['startDate'] != null) {
-                          DateTime start = DateTime.parse(trip['startDate']);
-                          dateDisplay = DateFormat('dd/MM/yyyy').format(start);
-                          if (trip['endDate'] != null) {
-                            DateTime end = DateTime.parse(trip['endDate']);
-                            dateDisplay +=
-                                " - ${DateFormat('dd/MM/yyyy').format(end)}";
+                        const SizedBox(height: 10),
+                        ...trips.map((trip) {
+                          // Formatação do intervalo de datas
+                          String dateDisplay = "";
+                          if (trip['startDate'] != null) {
+                            DateTime start = DateTime.parse(trip['startDate']);
+                            dateDisplay = DateFormat(
+                              'dd/MM/yyyy',
+                            ).format(start);
+                            if (trip['endDate'] != null) {
+                              DateTime end = DateTime.parse(trip['endDate']);
+                              dateDisplay +=
+                                  " - ${DateFormat('dd/MM/yyyy').format(end)}";
+                            }
                           }
-                        }
 
-                        return ListTile(
-                          contentPadding: EdgeInsets.zero,
-                          leading: Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: Colors.blue.withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Icon(
-                              _getTransportIcon(trip['transport']),
-                              color: Colors.blue,
-                              size: 20,
-                            ),
-                          ),
-                          title: Text(
-                            "Trip in ${trip['year']}",
-                            style: const TextStyle(fontWeight: FontWeight.w600),
-                          ),
-                          subtitle: dateDisplay.isNotEmpty
-                              ? Text(dateDisplay)
-                              : null,
-
-                          trailing: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              // Botão Editar
-                              IconButton(
-                                icon: const Icon(
-                                  Icons.edit_outlined,
-                                  size: 20,
-                                  color: Colors.grey,
-                                ),
-                                onPressed: () => setModalState(() {
-                                  tripToEdit = trip;
-                                  showTripForm = true;
-                                }),
+                          return ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            leading: Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: Colors.blue.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(8),
                               ),
-                              // Botão Apagar
-                              IconButton(
-                                icon: const Icon(
-                                  Icons.delete_outline,
-                                  size: 20,
-                                  color: Colors.redAccent,
-                                ),
-                                onPressed: () async {
-                                  // Confirmar antes de apagar (opcional, mas recomendado)
-                                  bool? confirm = await _showDeleteConfirm(
-                                    context,
-                                  );
-                                  if (confirm == true) {
-                                    await SessionManager()
-                                        .removeTripFromCountry(
-                                          countryCode,
-                                          trip,
-                                        );
-                                    setModalState(
-                                      () {},
-                                    ); // Atualiza a lista no modal
-                                  }
-                                },
+                              child: Icon(
+                                _getTransportIcon(trip['transport']),
+                                color: Colors.blue,
+                                size: 20,
                               ),
-                            ],
+                            ),
+                            title: Text(
+                              "Trip in ${trip['year']}",
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            subtitle: dateDisplay.isNotEmpty
+                                ? Text(dateDisplay)
+                                : null,
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                // Botão Editar
+                                IconButton(
+                                  icon: const Icon(
+                                    Icons.edit_outlined,
+                                    size: 20,
+                                    color: Colors.grey,
+                                  ),
+                                  onPressed: () => setModalState(() {
+                                    tripToEdit = trip;
+                                    showTripForm = true;
+                                  }),
+                                ),
+                                // Botão Apagar
+                                IconButton(
+                                  icon: const Icon(
+                                    Icons.delete_outline,
+                                    size: 20,
+                                    color: Colors.redAccent,
+                                  ),
+                                  onPressed: () async {
+                                    bool? confirm = await _showDeleteConfirm(
+                                      context,
+                                    );
+                                    if (confirm == true) {
+                                      final folderNameInDatabase =
+                                          trip['folderName'] ??
+                                          trip['year'].toString();
+                                      await SessionManager()
+                                          .removeTripFromCountry(
+                                            countryCode,
+                                            trip,
+                                          );
+                                      await CountryPhotoManager()
+                                          .removeFolderIfEmpty(
+                                            countryCode,
+                                            folderNameInDatabase,
+                                          );
+                                      setModalState(() {});
+                                    }
+                                  },
+                                ),
+                              ],
+                            ),
+                          );
+                        }).toList(),
+                        const Divider(),
+                      ] else ...[
+                        // Mensagem caso não existam viagens
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 20),
+                          child: Center(
+                            child: Text(
+                              "No trips registered yet.",
+                              style: TextStyle(
+                                color: Colors.grey,
+                                fontStyle: FontStyle.italic,
+                              ),
+                            ),
                           ),
-                        );
-                      }).toList(),
-                      const Divider(),
+                        ),
+                      ],
                     ],
 
                     const SizedBox(height: 15),
 
-                    // BOTÕES / FORMULÁRIO
+                    // 2. Bloco do Botão Adicionar ou do Formulário
                     if (!showTripForm) ...[
-                      _buildActionButtons(
-                        context,
-                        countryCode,
-                        onVisitClick: () =>
-                            setModalState(() => showTripForm = true),
-                      ),
-                      if (trips.isNotEmpty)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 8.0),
-                          child: TextButton.icon(
-                            onPressed: () => setModalState(() {
-                              tripToEdit = null;
-                              showTripForm = true;
-                            }),
-                            icon: const Icon(Icons.add),
-                            label: const Text("Add another trip"),
-                          ),
+                      // Botão que está SEMPRE presente se o formulário estiver fechado
+                      Center(
+                        child: Column(
+                          children: [
+                            // Se quiseres manter os teus botões originais (Share, etc)
+                            _buildActionButtons(
+                              context,
+                              countryCode,
+                              onVisitClick: () =>
+                                  setModalState(() => showTripForm = true),
+                            ),
+                            // Botão extra de suporte caso a lista esteja vazia ou queiras atalho rápido
+                            Padding(
+                              padding: const EdgeInsets.only(top: 10),
+                              child: TextButton.icon(
+                                onPressed: () => setModalState(() {
+                                  tripToEdit = null;
+                                  showTripForm = true;
+                                }),
+                                icon: const Icon(Icons.add),
+                                label: Text(
+                                  trips.isEmpty
+                                      ? "Add your first trip"
+                                      : "Add another trip",
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
-                    ] else
+                      ),
+                    ] else ...[
+                      // FORMULÁRIO DE EDIÇÃO/CRIAÇÃO
+                      // FORMULÁRIO DE EDIÇÃO/CRIAÇÃO
                       TripDetailsForm(
                         countryName: countryName,
                         initialTrip: tripToEdit,
                         onCancel: () =>
                             setModalState(() => showTripForm = false),
-                        onSave: (year, transport, start, end) async {
-                          if (tripToEdit != null) {
-                            await SessionManager().removeTripFromCountry(
-                              countryCode,
-                              tripToEdit!,
-                            );
-                          }
+                        onSave:
+                            (
+                              year,
+                              transport,
+                              start,
+                              end,
+                              wantFolder,
+                              customFolderName,
+                            ) async {
+                              // 1. Definir o nome da pasta
+                              String finalFolderName =
+                                  customFolderName.trim().isEmpty
+                                  ? "$year"
+                                  : customFolderName.trim();
 
-                          await SessionManager().addTripToCountry(
-                            countryCode,
-                            year: year,
-                            transport: transport,
-                            startDate: start,
-                            endDate: end,
-                          );
-                          setModalState(() {
-                            showTripForm = false;
-                            tripToEdit = null;
-                          });
-                        },
+                              // 2. Se for EDIÇÃO, apagar a versão antiga primeiro
+                              if (tripToEdit != null) {
+                                final folderToDelete =
+                                    tripToEdit!['folderName'] ??
+                                    tripToEdit!['year'].toString();
+
+                                await SessionManager().removeTripFromCountry(
+                                  countryCode,
+                                  tripToEdit!,
+                                );
+
+                                await CountryPhotoManager().removeFolderIfEmpty(
+                                  countryCode,
+                                  folderToDelete,
+                                );
+
+                                // Pequena pausa para garantir que o Firestore processa a remoção
+                                await Future.delayed(
+                                  const Duration(milliseconds: 300),
+                                );
+                              }
+
+                              // 3. SALVAR A VIAGEM (Apenas uma vez!)
+                              await SessionManager().addTripToCountry(
+                                countryCode,
+                                year: year,
+                                transport: transport,
+                                startDate: start,
+                                endDate: end,
+                                folderName: finalFolderName,
+                              );
+
+                              // 4. CRIAR A PASTA (Só se o user quis)
+                              if (wantFolder) {
+                                await CountryPhotoManager()
+                                    .createAutomaticFolder(
+                                      countryCode.toUpperCase(),
+                                      finalFolderName,
+                                    );
+                              }
+
+                              // 5. Fechar o formulário e resetar o estado
+                              setModalState(() {
+                                showTripForm = false;
+                                tripToEdit = null;
+                              });
+                            },
                       ),
-                    const SizedBox(height: 10),
+                    ],
+                    // --- FIM DO BLOCO ---
                   ],
                 ),
               ),

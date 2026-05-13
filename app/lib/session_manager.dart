@@ -359,6 +359,7 @@ class SessionManager {
     required String? transport,
     DateTime? startDate,
     DateTime? endDate,
+    String? folderName,
   }) async {
     if (_currentUser == null) return;
     final String code = countryCode.toUpperCase();
@@ -367,6 +368,7 @@ class SessionManager {
     // Criamos o objeto da nova viagem
     final newTrip = {
       'year': year,
+      'folderName': folderName,
       'transport': transport ?? 'plane',
       'startDate': startDate?.toIso8601String(),
       'endDate': endDate?.toIso8601String(),
@@ -503,6 +505,7 @@ class SessionManager {
       'visitedCountries.$code.trips': FieldValue.arrayRemove([trip]),
     });
 
+    // Garante que os dados locais da sessão estão frescos
     await refreshUserData();
   }
 }

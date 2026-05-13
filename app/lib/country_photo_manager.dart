@@ -18,10 +18,14 @@ class CountryPhotoManager {
 
   // --- Mapas de Notifiers (Estado Reativo) ---
   // Guardam os estados em memória para que a UI saiba quando atualizar
-  final Map<String, ValueNotifier<List<File>>> _notifiers = {}; // Fotos na raiz do país
-  final Map<String, Map<String, ValueNotifier<List<File>>>> _folderNotifiers = {}; // Fotos dentro de pastas específicas
-  final Map<String, ValueNotifier<List<String>>> _folderListNotifiers = {}; // Lista de nomes das pastas
-  final Map<String, ValueNotifier<String?>> _notes = {}; // Notas de texto do país
+  final Map<String, ValueNotifier<List<File>>> _notifiers =
+      {}; // Fotos na raiz do país
+  final Map<String, Map<String, ValueNotifier<List<File>>>> _folderNotifiers =
+      {}; // Fotos dentro de pastas específicas
+  final Map<String, ValueNotifier<List<String>>> _folderListNotifiers =
+      {}; // Lista de nomes das pastas
+  final Map<String, ValueNotifier<String?>> _notes =
+      {}; // Notas de texto do país
 
   // Atalho para obter o ID do utilizador atual do Firebase
   String? get _uid => _auth.currentUser?.uid;
@@ -32,13 +36,19 @@ class CountryPhotoManager {
   ValueNotifier<List<File>> _ensureNotifier(String countryCode) =>
       _notifiers.putIfAbsent(countryCode, () => ValueNotifier<List<File>>([]));
 
-  ValueNotifier<List<File>> _ensureFolderNotifier(String countryCode, String folderName) {
+  ValueNotifier<List<File>> _ensureFolderNotifier(
+    String countryCode,
+    String folderName,
+  ) {
     final map = _folderNotifiers.putIfAbsent(countryCode, () => {});
     return map.putIfAbsent(folderName, () => ValueNotifier<List<File>>([]));
   }
 
   ValueNotifier<List<String>> _ensureFolderListNotifier(String countryCode) =>
-      _folderListNotifiers.putIfAbsent(countryCode, () => ValueNotifier<List<String>>([]));
+      _folderListNotifiers.putIfAbsent(
+        countryCode,
+        () => ValueNotifier<List<String>>([]),
+      );
 
   ValueNotifier<String?> _ensureNoteNotifier(String countryCode) =>
       _notes.putIfAbsent(countryCode, () => ValueNotifier<String?>(null));
@@ -50,7 +60,12 @@ class CountryPhotoManager {
     if (_uid == null) return;
 
     try {
-      final doc = await _db.collection('users').doc(_uid).collection('countries').doc(countryCode).get();
+      final doc = await _db
+          .collection('users')
+          .doc(_uid)
+          .collection('countries')
+          .doc(countryCode)
+          .get();
       if (!doc.exists) return;
 
       final data = doc.data()!;
@@ -60,18 +75,21 @@ class CountryPhotoManager {
 
       // 2. Atualizar Fotos da Raiz (converte caminhos String para objetos File)
       final List<dynamic> rootPaths = data['rootPhotos'] ?? [];
-      _ensureNotifier(countryCode).value = rootPaths.map((path) => File(path)).toList();
+      _ensureNotifier(countryCode).value = rootPaths
+          .map((path) => File(path))
+          .toList();
 
       // 3. Atualizar Pastas e os seus conteúdos
       final Map<String, dynamic> foldersData = data['folders'] ?? {};
       final folderNames = foldersData.keys.toList();
-      
+
       foldersData.forEach((folderName, photos) {
         final List<dynamic> photoPaths = photos ?? [];
-        _ensureFolderNotifier(countryCode, folderName).value = 
-            photoPaths.map((path) => File(path)).toList();
+        _ensureFolderNotifier(countryCode, folderName).value = photoPaths
+            .map((path) => File(path))
+            .toList();
       });
-      
+
       _ensureFolderListNotifier(countryCode).value = folderNames;
     } catch (e) {
       debugPrint("Erro ao carregar dados do país $countryCode: $e");
@@ -79,7 +97,11 @@ class CountryPhotoManager {
   }
 
   /// Adiciona fotos: copia para o armazenamento permanente do dispositivo e guarda o caminho no Firestore.
-  Future<void> addPhotos(String countryCode, List<File> files, {String? folderName}) async {
+  Future<void> addPhotos(
+    String countryCode,
+    List<File> files, {
+    String? folderName,
+  }) async {
     if (_uid == null) return;
 
     final directory = await getApplicationDocumentsDirectory();
@@ -88,22 +110,29 @@ class CountryPhotoManager {
     for (var file in files) {
       // Cria um nome único baseado no timestamp para evitar conflitos de ficheiros
       final String extension = p.extension(file.path);
-      final String name = "${countryCode}_${DateTime.now().microsecondsSinceEpoch}$extension";
+      final String name =
+          "${countryCode}_${DateTime.now().microsecondsSinceEpoch}$extension";
       final String permanentPath = p.join(directory.path, name);
-      
+
       // Copia da pasta temporária da galeria para a pasta da aplicação
       await file.copy(permanentPath);
       newPaths.add(permanentPath);
     }
 
-    final docRef = _db.collection('users').doc(_uid).collection('countries').doc(countryCode);
+    final docRef = _db
+        .collection('users')
+        .doc(_uid)
+        .collection('countries')
+        .doc(countryCode);
 
     // Gravação no Firestore utilizando FieldValue.arrayUnion para não apagar fotos existentes
     if (folderName == null || folderName.isEmpty) {
-      await docRef.set({'rootPhotos': FieldValue.arrayUnion(newPaths)}, SetOptions(merge: true));
+      await docRef.set({
+        'rootPhotos': FieldValue.arrayUnion(newPaths),
+      }, SetOptions(merge: true));
     } else {
       await docRef.set({
-        'folders': { folderName: FieldValue.arrayUnion(newPaths) }
+        'folders': {folderName: FieldValue.arrayUnion(newPaths)},
       }, SetOptions(merge: true));
     }
 
@@ -115,46 +144,128 @@ class CountryPhotoManager {
   Future<void> setNote(String countryCode, String? note) async {
     if (_uid == null) return;
     final cleanNote = (note != null && note.trim().isEmpty) ? null : note;
-    
-    await _db.collection('users').doc(_uid).collection('countries').doc(countryCode).set({
-      'note': cleanNote
-    }, SetOptions(merge: true));
-    
+
+    await _db
+        .collection('users')
+        .doc(_uid)
+        .collection('countries')
+        .doc(countryCode)
+        .set({'note': cleanNote}, SetOptions(merge: true));
+
     _ensureNoteNotifier(countryCode).value = cleanNote;
   }
 
   /// Remove fotos tanto da base de dados como do armazenamento físico do telemóvel.
-  Future<void> removePhotos(String countryCode, List<File> filesToRemove, {String? folderName}) async {
+  Future<void> removePhotos(
+    String countryCode,
+    List<File> filesToRemove, {
+    String? folderName,
+  }) async {
     if (_uid == null) return;
 
     final pathsToRemove = filesToRemove.map((f) => f.path).toList();
-    final docRef = _db.collection('users').doc(_uid).collection('countries').doc(countryCode);
+    final docRef = _db
+        .collection('users')
+        .doc(_uid)
+        .collection('countries')
+        .doc(countryCode);
 
     if (folderName == null || folderName.isEmpty) {
-      await docRef.update({'rootPhotos': FieldValue.arrayRemove(pathsToRemove)});
+      await docRef.update({
+        'rootPhotos': FieldValue.arrayRemove(pathsToRemove),
+      });
     } else {
       await docRef.set({
-        'folders': { folderName: FieldValue.arrayRemove(pathsToRemove) }
+        'folders': {folderName: FieldValue.arrayRemove(pathsToRemove)},
       }, SetOptions(merge: true));
     }
-    
+
     // Limpeza física dos ficheiros para poupar espaço no dispositivo
     for (var f in filesToRemove) {
-      try { if (await f.exists()) await f.delete(); } catch (_) {}
+      try {
+        if (await f.exists()) await f.delete();
+      } catch (_) {}
     }
 
     await loadCountryData(countryCode);
   }
 
   // --- Getters Reativos (Para usar em ValueListenableBuilders na UI) ---
-  
-  ValueNotifier<List<File>> getNotifierForCountry(String code) => _ensureNotifier(code);
-  ValueNotifier<List<File>> getFolderNotifier(String code, String folder) => _ensureFolderNotifier(code, folder);
-  ValueNotifier<List<String>> getFolderListNotifier(String code) => _ensureFolderListNotifier(code);
-  ValueNotifier<String?> getNoteNotifier(String code) => _ensureNoteNotifier(code);
-  
+
+  ValueNotifier<List<File>> getNotifierForCountry(String code) =>
+      _ensureNotifier(code);
+  ValueNotifier<List<File>> getFolderNotifier(String code, String folder) =>
+      _ensureFolderNotifier(code, folder);
+  ValueNotifier<List<String>> getFolderListNotifier(String code) =>
+      _ensureFolderListNotifier(code);
+  ValueNotifier<String?> getNoteNotifier(String code) =>
+      _ensureNoteNotifier(code);
+
   // Getters de valor imediato
   String? getNote(String code) => _ensureNoteNotifier(code).value;
   List<File> getPhotos(String code) => _ensureNotifier(code).value;
-  List<File> getPhotosInFolder(String code, String folder) => _ensureFolderNotifier(code, folder).value;
+  List<File> getPhotosInFolder(String code, String folder) =>
+      _ensureFolderNotifier(code, folder).value;
+
+  /// Cria uma pasta vazia para um país (útil para sincronização com a Timeline).
+  /// Se a pasta já existir, não faz nada.
+  Future<void> createAutomaticFolder(
+    String countryCode,
+    dynamic folderName,
+  ) async {
+    if (_uid == null) return;
+    try {
+      final String fName = folderName.toString(); // Garante que é String
+      final docRef = _db
+          .collection('users')
+          .doc(_uid)
+          .collection('countries')
+          .doc(countryCode.toUpperCase());
+
+      await docRef.set({
+        'folders': {fName: FieldValue.arrayUnion([])},
+      }, SetOptions(merge: true));
+
+      await loadCountryData(countryCode.toUpperCase());
+    } catch (e) {
+      debugPrint("Erro ao criar pasta automática: $e");
+    }
+  }
+
+  Future<void> removeFolderIfEmpty(
+    String countryCode,
+    dynamic folderName,
+  ) async {
+    try {
+      final String fCode = countryCode.toUpperCase();
+      // Forçamos o nome da pasta a ser String, caso venha um int do ano
+      final String fName = folderName.toString();
+
+      if (_uid == null) return;
+
+      final docRef = _db
+          .collection('users')
+          .doc(_uid)
+          .collection('countries')
+          .doc(fCode);
+
+      final snapshot = await docRef.get();
+      if (!snapshot.exists) return;
+
+      final data = snapshot.data() as Map<String, dynamic>;
+      final folders = data['folders'] as Map<String, dynamic>? ?? {};
+
+      if (folders.containsKey(fName)) {
+        final List photos = folders[fName] ?? [];
+
+        if (photos.isEmpty) {
+          await docRef.update({'folders.$fName': FieldValue.delete()});
+          print("✅ Sucesso: Pasta $fName removida.");
+          await loadCountryData(fCode);
+        }
+      }
+    } catch (e) {
+      print("❌ Erro ao remover pasta: $e");
+    }
+  }
 }

@@ -4,7 +4,14 @@ import 'package:intl/intl.dart';
 class TripDetailsForm extends StatefulWidget {
   final String countryName;
   final Map<String, dynamic>? initialTrip; // Se for nulo, é uma nova viagem
-  final Function(int year, String transport, DateTime? start, DateTime? end)
+  final Function(
+    int year,
+    String transport,
+    DateTime start,
+    DateTime end,
+    bool wantFolder,
+    String folderName,
+  )
   onSave;
   final VoidCallback? onCancel;
 
@@ -21,6 +28,8 @@ class TripDetailsForm extends StatefulWidget {
 }
 
 class _TripDetailsFormState extends State<TripDetailsForm> {
+  bool _createFolder = true;
+  late TextEditingController _folderNameController;
   late int selectedYear;
   late String selectedTransport;
   DateTime? startDate;
@@ -29,6 +38,11 @@ class _TripDetailsFormState extends State<TripDetailsForm> {
   @override
   void initState() {
     super.initState();
+    _folderNameController = TextEditingController(
+      text:
+          widget.initialTrip?['year']?.toString() ??
+          DateTime.now().year.toString(),
+    );
     // Se estivermos a editar, carregamos os dados. Se não, usamos valores padrão.
     selectedYear = widget.initialTrip?['year'] ?? DateTime.now().year;
     selectedTransport = widget.initialTrip?['transport'] ?? 'plane';
@@ -117,7 +131,18 @@ class _TripDetailsFormState extends State<TripDetailsForm> {
                   ),
                 )
                 .toList(),
-            onChanged: (val) => setState(() => selectedYear = val!),
+            onChanged: (val) {
+              setState(() {
+                selectedYear = val!;
+                // Se o utilizador ainda não alterou o nome da pasta manualmente, atualizamos com o novo ano
+                if (_folderNameController.text ==
+                        widget.initialTrip?['year']?.toString() ||
+                    _folderNameController.text ==
+                        DateTime.now().year.toString()) {
+                  _folderNameController.text = val.toString();
+                }
+              });
+            },
           ),
 
           const SizedBox(height: 20),
@@ -220,6 +245,31 @@ class _TripDetailsFormState extends State<TripDetailsForm> {
 
           const SizedBox(height: 25),
 
+          const Divider(),
+          SwitchListTile(
+            title: const Text("Criar pasta na galeria?"),
+            value: _createFolder,
+            onChanged: (val) => setState(() => _createFolder = val),
+            secondary: Icon(
+              _createFolder ? Icons.folder_shared : Icons.folder_off,
+            ),
+          ),
+
+          if (_createFolder)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: TextField(
+                controller: _folderNameController,
+                decoration: const InputDecoration(
+                  labelText: "Nome da Pasta",
+                  hintText: "Ex: Viagem de Verão",
+                  prefixIcon: Icon(Icons.edit_note),
+                ),
+              ),
+            ),
+
+          const SizedBox(height: 20),
+
           // BOTÃO GUARDAR
           SizedBox(
             width: double.infinity,
@@ -236,8 +286,10 @@ class _TripDetailsFormState extends State<TripDetailsForm> {
               onPressed: () => widget.onSave(
                 selectedYear,
                 selectedTransport,
-                startDate,
-                endDate,
+                startDate ?? DateTime.now(),
+                endDate ?? DateTime.now(),
+                _createFolder,
+                _folderNameController.text,
               ),
               child: const Text(
                 "Save Visit",
